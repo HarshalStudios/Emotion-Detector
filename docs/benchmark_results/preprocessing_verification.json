@@ -1,0 +1,30 @@
+{
+  "audit_version": "Step_3B_Verified_v2",
+  "detection_confidence_status": {
+    "api_exposure": false,
+    "explanation": "MediaPipe Face Landmarker Tasks API does not expose a per-face confidence score in FaceLandmarkerResult. Hardcoded values removed. Field set to None.",
+    "enforcement_mechanism": "Internal graph threshold (min_face_detection_confidence=0.40)."
+  },
+  "preprocessing_sequence": [
+    "1. MediaPipe Face Landmarker (478 3D landmarks + 52 blendshapes + 4x4 matrix)",
+    "2. Multi-face largest area selection (w * h)",
+    "3. 5-point canonical similarity alignment (rigid Euclidean rotation to horizontal inter-ocular axis)",
+    "4. 1.30 margin crop around aligned face bounding box",
+    "5. 224x224 bilinear resize (cv2.INTER_LINEAR)",
+    "6. ImageNet normalization (mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]) -> (3, 224, 224) float32",
+    "7. 62-D geometry vector (52 blendshapes + 10 normalized distance ratios)"
+  ],
+  "parity_test_results": {
+    "path_a": "Training DataLoader (is_webcam=False)",
+    "path_b": "Inference / ONNX API (is_webcam=True)",
+    "max_abs_tensor_difference": 0.0,
+    "max_abs_geometry_difference": 0.0,
+    "parity_verdict": "PERFECT_NUMERICAL_IDENTITY"
+  },
+  "webcam_partial_face_audit": {
+    "sub_64px_rule_active": true,
+    "head_pose_angles_checked": "|yaw| > 45 deg, |pitch| > 35 deg, |roll| > 45 deg",
+    "training_samples_discarded": 0,
+    "training_immunity_verified": true
+  }
+}

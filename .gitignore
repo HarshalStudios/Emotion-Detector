@@ -1,0 +1,33 @@
+node_modules/
+build/
+dist/
+coverage/
+.DS_Store
+*.log
+.env*
+!.env.example
+
+# Datasets & raw images (Strictly never commit datasets to Git)
+data/
+datasets/
+*.zip
+*.tar
+*.tar.gz
+*.npy
+*.npz
+
+# Model weights & training checkpoints
+checkpoints/
+models/*.onnx
+models/*.pt
+models/*.pth
+*.onnx
+*.pt
+*.pth
+
+# Experiments, cache, and profiler dumps
+.cache/
+wandb/
+runs/
+__pycache__/
+*.pyc

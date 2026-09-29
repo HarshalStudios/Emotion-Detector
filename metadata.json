@@ -1,0 +1,6 @@
+{
+  "name": "Emotion Detector - Multi-Representation Facial Mood Analysis",
+  "description": "Multi-Representation Facial Mood Analysis from a Single RGB Camera: Recognizing Seven Facial Expressions in Real Time",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
