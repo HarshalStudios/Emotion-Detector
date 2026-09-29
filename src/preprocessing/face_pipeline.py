@@ -305,15 +305,16 @@ class FacePipeline:
 
         Returns:
             Dict containing:
-                face_detected: bool
+                face_detected: bool (True only if actual MediaPipe face detected)
+                fallback_used: bool (True if dataset fallback was required when zero faces detected)
                 partial_face: bool (True only on webcam if conditions violated)
-                image_tensor: np.ndarray of shape (3, 224, 224), float32 ImageNet normalized
-                geometry_vector: np.ndarray of shape (62,), float32 (zero-masked if partial/invalid)
-                geometry_valid: bool (1 if geometry is active, 0 if masked)
+                image_tensor: Optional[np.ndarray] of shape (3, 224, 224), float32 ImageNet normalized
+                geometry_vector: np.ndarray of shape (62,), float32 (zero-masked if partial/invalid/fallback)
+                geometry_valid: bool (1 if geometry is active, 0 if masked/fallback)
                 head_pose: Dict[str, float] with pitch, yaw, roll in degrees
                 detection_confidence: Optional[float] (real numeric score from MediaPipe FaceDetector)
-                bbox: Tuple[int, int, int, int] (x, y, w, h)
-                audit_meta: Dict with stage-by-stage audit data
+                bbox: Optional[Tuple[int, int, int, int]] (x, y, w, h)
+                audit_meta: Optional[Dict] with stage-by-stage audit data
         """
         img_h, img_w, _ = image_rgb.shape
 
@@ -325,17 +326,52 @@ class FacePipeline:
         detection_result = self._landmarker.detect(mp_image)
 
         if not detection_result.face_landmarks or len(detection_result.face_landmarks) == 0:
-            return {
-                "face_detected": False,
-                "partial_face": False,
-                "image_tensor": None,
-                "geometry_vector": np.zeros(62, dtype=np.float32),
-                "geometry_valid": False,
-                "head_pose": {"pitch": 0.0, "yaw": 0.0, "roll": 0.0},
-                "detection_confidence": None,
-                "bbox": None,
-                "audit_meta": None,
-            }
+            if not is_webcam:
+                # Dataset fallback mode (is_webcam=False):
+                # When MediaPipe detects zero faces in dataset images (e.g. pre-cropped RAF-DB chips),
+                # DO NOT discard the sample.
+                # DO NOT invent landmarks or a bounding box.
+                # DO NOT claim that a face was detected.
+                # Resize input RGB directly to 224x224 bilinear, apply ImageNet normalization.
+                resized_rgb = cv2.resize(
+                    image_rgb, (self.target_size, self.target_size), interpolation=cv2.INTER_LINEAR
+                )
+                norm_img = resized_rgb.astype(np.float32) / 255.0
+                norm_img = (norm_img - IMAGENET_MEAN) / IMAGENET_STD
+                image_tensor = np.transpose(norm_img, (2, 0, 1)).astype(np.float32)
+
+                return {
+                    "face_detected": False,
+                    "fallback_used": True,
+                    "partial_face": False,
+                    "image_tensor": image_tensor,
+                    "geometry_vector": np.zeros(62, dtype=np.float32),
+                    "geometry_valid": False,
+                    "head_pose": {"pitch": 0.0, "yaw": 0.0, "roll": 0.0},
+                    "detection_confidence": None,
+                    "bbox": None,
+                    "audit_meta": {
+                        "dataset_fallback": True,
+                        "stage_3_target_size": (self.target_size, self.target_size),
+                        "stage_4_tensor_shape": image_tensor.shape,
+                    },
+                }
+            else:
+                # Webcam mode (is_webcam=True):
+                # Keep existing no-face behavior strictly unchanged:
+                # face_detected=False, fallback_used=False, image_tensor=None
+                return {
+                    "face_detected": False,
+                    "fallback_used": False,
+                    "partial_face": False,
+                    "image_tensor": None,
+                    "geometry_vector": np.zeros(62, dtype=np.float32),
+                    "geometry_valid": False,
+                    "head_pose": {"pitch": 0.0, "yaw": 0.0, "roll": 0.0},
+                    "detection_confidence": None,
+                    "bbox": None,
+                    "audit_meta": None,
+                }
 
         # Multiple Faces Rule: Select face with largest 2D bounding box area
         best_face_idx = 0
@@ -418,6 +454,7 @@ class FacePipeline:
 
         return {
             "face_detected": True,
+            "fallback_used": False,
             "partial_face": partial_face,
             "image_tensor": image_tensor,
             "geometry_vector": geom_vec,
@@ -440,7 +477,8 @@ class FacePipeline:
         image_tensor = np.transpose(norm_img, (2, 0, 1)).astype(np.float32)
 
         return {
-            "face_detected": True,
+            "face_detected": False,
+            "fallback_used": True,
             "partial_face": False,
             "image_tensor": image_tensor,
             "geometry_vector": np.zeros(62, dtype=np.float32),
