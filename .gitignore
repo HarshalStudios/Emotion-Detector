@@ -8,7 +8,15 @@ coverage/
 !.env.example
 
 # Datasets & raw images (Strictly never commit datasets to Git)
-data/
+data/*
+
+!data/raw/
+data/raw/*
+
+!data/raw/raf-db/
+data/raw/raf-db/*
+
+!data/raw/raf-db/train-00000-of-00001.parquet
 datasets/
 *.zip
 *.tar
