@@ -1,0 +1,124 @@
+{
+  "benchmark_name": "Gate_2_Backbone_CPU_Latency_Benchmark",
+  "timestamp": "2026-09-29T20:21:14.606591+00:00",
+  "methodology": {
+    "framework": "ONNX Runtime CPUExecutionProvider",
+    "input_resolution": [
+      3,
+      224,
+      224
+    ],
+    "batch_size": 1,
+    "warmup_iterations": 100,
+    "timed_iterations": 1000,
+    "timing_function": "time.perf_counter",
+    "threads_evaluated": [
+      1,
+      4
+    ],
+    "metrics": [
+      "mean_ms",
+      "p50_ms",
+      "p95_ms",
+      "fps (1000 / mean_ms)"
+    ]
+  },
+  "hardware": {
+    "cpu": "unknown",
+    "architecture": "x86_64",
+    "physical_cores": 2,
+    "logical_cores": 2,
+    "ram_gb": 4.0,
+    "os": "Linux 4.19.0-gvisor"
+  },
+  "software": {
+    "python": "3.10.12",
+    "pytorch": "2.14.0+cpu",
+    "onnxruntime": "1.23.2",
+    "opencv": "4.11.0",
+    "numpy": "1.26.4"
+  },
+  "models": [
+    {
+      "model_name": "MobileNetV3-Large",
+      "model_id": "mobilenet_v3_large",
+      "parameters": "5.48M",
+      "onnx_size_bytes": 340829,
+      "onnx_size_mb": 0.33,
+      "thread_benchmarks": {
+        "1_thread": {
+          "thread_count": 1,
+          "warmup_count": 100,
+          "timed_iteration_count": 1000,
+          "mean_ms": 8.656,
+          "p50_ms": 8.57,
+          "p95_ms": 9.259,
+          "fps": 115.5
+        },
+        "4_thread": {
+          "thread_count": 4,
+          "warmup_count": 100,
+          "timed_iteration_count": 1000,
+          "mean_ms": 15.811,
+          "p50_ms": 5.846,
+          "p95_ms": 69.538,
+          "fps": 63.2
+        }
+      }
+    },
+    {
+      "model_name": "EfficientNet-B0",
+      "model_id": "efficientnet_b0",
+      "parameters": "5.29M",
+      "onnx_size_bytes": 603993,
+      "onnx_size_mb": 0.58,
+      "thread_benchmarks": {
+        "1_thread": {
+          "thread_count": 1,
+          "warmup_count": 100,
+          "timed_iteration_count": 1000,
+          "mean_ms": 20.232,
+          "p50_ms": 20.133,
+          "p95_ms": 21.117,
+          "fps": 49.4
+        },
+        "4_thread": {
+          "thread_count": 4,
+          "warmup_count": 100,
+          "timed_iteration_count": 1000,
+          "mean_ms": 31.079,
+          "p50_ms": 11.603,
+          "p95_ms": 75.609,
+          "fps": 32.2
+        }
+      }
+    },
+    {
+      "model_name": "ConvNeXt-Tiny",
+      "model_id": "convnext_tiny",
+      "parameters": "28.59M",
+      "onnx_size_bytes": 601218,
+      "onnx_size_mb": 0.57,
+      "thread_benchmarks": {
+        "1_thread": {
+          "thread_count": 1,
+          "warmup_count": 100,
+          "timed_iteration_count": 1000,
+          "mean_ms": 141.736,
+          "p50_ms": 140.268,
+          "p95_ms": 155.578,
+          "fps": 7.1
+        },
+        "4_thread": {
+          "thread_count": 4,
+          "warmup_count": 100,
+          "timed_iteration_count": 1000,
+          "mean_ms": 223.112,
+          "p50_ms": 204.103,
+          "p95_ms": 283.788,
+          "fps": 4.5
+        }
+      }
+    }
+  ]
+}

@@ -66,10 +66,16 @@ def run_audit():
     res = pipeline.process_image(test_rgb, is_webcam=False)
     print("\n[TEST 1] Detection Confidence API Audit:")
     print(f"  Returned detection_confidence: {res['detection_confidence']}")
-    assert res['detection_confidence'] is None, (
-        f"FAILED: detection_confidence should be None (unavailable in MediaPipe Tasks API), got {res['detection_confidence']}"
+    assert isinstance(res['detection_confidence'], float), (
+        f"FAILED: detection_confidence should be a float from FaceDetector, got {type(res['detection_confidence'])}"
     )
-    print("  --> PASS: Verified that detection_confidence is explicitly None and NOT hardcoded to 0.92.")
+    assert 0.0 <= res['detection_confidence'] <= 1.0, (
+        f"FAILED: detection_confidence {res['detection_confidence']} is not in range [0.0, 1.0]"
+    )
+    assert abs(res['detection_confidence'] - 0.92) > 1e-4, (
+        "FAILED: detection_confidence must be real score, not hardcoded 0.92"
+    )
+    print(f"  --> PASS: Verified that detection_confidence is real numeric float ({res['detection_confidence']:.4f}) and NOT hardcoded to 0.92.")
 
     # -------------------------------------------------------------------------
     # TEST 2: Exact Preprocessing Sequence Verification
@@ -149,11 +155,13 @@ def run_audit():
 
     # Save detailed JSON verification artifact
     audit_summary = {
-        "audit_version": "Step_3B_Verified_v2",
+        "audit_version": "Step_3B_Verified_v3",
         "detection_confidence_status": {
-            "api_exposure": False,
-            "explanation": "MediaPipe Face Landmarker Tasks API does not expose a per-face confidence score in FaceLandmarkerResult. Hardcoded values removed. Field set to None.",
-            "enforcement_mechanism": "Internal graph threshold (min_face_detection_confidence=0.40)."
+            "api_exposure": True,
+            "provider": "MediaPipe Tasks FaceDetector (blaze_face_short_range.tflite)",
+            "field": "detections[0].categories[0].score",
+            "enforcement_mechanism": "Explicit webcam guard: detection_confidence < 0.50 triggers partial_face advisory and geometry masking.",
+            "test_sample_score": float(res['detection_confidence'])
         },
         "preprocessing_sequence": [
             "1. MediaPipe Face Landmarker (478 3D landmarks + 52 blendshapes + 4x4 matrix)",

@@ -92,18 +92,37 @@ class FacePipeline:
     def __init__(
         self,
         model_path: str = "/app/applet/models/mediapipe/face_landmarker.task",
+        detector_model_path: str = "/app/applet/models/mediapipe/blaze_face_short_range.tflite",
         target_size: int = 224,
         margin_factor: float = 1.30,
     ):
         self.target_size = target_size
         self.margin_factor = margin_factor
         self.model_path = model_path
+        self.detector_model_path = detector_model_path
         self._landmarker = None
+        self._detector = None
 
         if os.path.exists(model_path):
             self._init_landmarker(model_path)
         elif os.path.exists("models/mediapipe/face_landmarker.task"):
             self._init_landmarker("models/mediapipe/face_landmarker.task")
+
+        if os.path.exists(detector_model_path):
+            self._init_detector(detector_model_path)
+        elif os.path.exists("models/mediapipe/blaze_face_short_range.tflite"):
+            self._init_detector("models/mediapipe/blaze_face_short_range.tflite")
+
+    def _init_detector(self, model_path: str) -> None:
+        from mediapipe.tasks import python
+        from mediapipe.tasks.python import vision
+
+        base_options = python.BaseOptions(model_asset_path=model_path)
+        options = vision.FaceDetectorOptions(
+            base_options=base_options,
+            min_detection_confidence=0.10,
+        )
+        self._detector = vision.FaceDetector.create_from_options(options)
 
     def _init_landmarker(self, model_path: str) -> None:
         import mediapipe as mp
@@ -292,7 +311,7 @@ class FacePipeline:
                 geometry_vector: np.ndarray of shape (62,), float32 (zero-masked if partial/invalid)
                 geometry_valid: bool (1 if geometry is active, 0 if masked)
                 head_pose: Dict[str, float] with pitch, yaw, roll in degrees
-                detection_confidence: None (explicitly marked unavailable in MediaPipe Tasks API)
+                detection_confidence: Optional[float] (real numeric score from MediaPipe FaceDetector)
                 bbox: Tuple[int, int, int, int] (x, y, w, h)
                 audit_meta: Dict with stage-by-stage audit data
         """
@@ -345,10 +364,18 @@ class FacePipeline:
             R = mat4[:3, :3]
             pitch, yaw, roll = rotation_matrix_to_euler_angles(R)
 
-        # MediaPipe Face Landmarker Tasks API Audit:
-        # The Tasks API does NOT expose a numeric per-face detection score.
-        # It relies on internal graph acceptance (min_face_detection_confidence=0.40).
+        # MediaPipe Face Detector: Obtain real detection confidence
         detection_confidence = None
+        if self._detector is not None:
+            det_result = self._detector.detect(mp_image)
+            if det_result.detections and len(det_result.detections) > 0:
+                # Multiple Faces Rule: Select face with largest 2D bounding box area
+                best_det = max(
+                    det_result.detections,
+                    key=lambda d: d.bounding_box.width * d.bounding_box.height,
+                )
+                if best_det.categories and len(best_det.categories) > 0:
+                    detection_confidence = float(best_det.categories[0].score)
 
         # Partial-Face Validation Rule (Strictly Webcam Only)
         partial_face = False
@@ -358,6 +385,9 @@ class FacePipeline:
             if bbox_w < 64 or bbox_h < 64:
                 partial_face = True
                 partial_reason = f"Face dimensions below 64px: {bbox_w}x{bbox_h}"
+            elif detection_confidence is not None and detection_confidence < 0.50:
+                partial_face = True
+                partial_reason = f"Detection confidence below 0.50: {detection_confidence:.3f} < 0.50"
             elif abs(yaw) > 45.0:
                 partial_face = True
                 partial_reason = f"Extreme yaw: {yaw:.1f} deg > 45 deg"

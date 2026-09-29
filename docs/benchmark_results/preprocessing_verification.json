@@ -1,9 +1,11 @@
 {
-  "audit_version": "Step_3B_Verified_v2",
+  "audit_version": "Step_3B_Verified_v3",
   "detection_confidence_status": {
-    "api_exposure": false,
-    "explanation": "MediaPipe Face Landmarker Tasks API does not expose a per-face confidence score in FaceLandmarkerResult. Hardcoded values removed. Field set to None.",
-    "enforcement_mechanism": "Internal graph threshold (min_face_detection_confidence=0.40)."
+    "api_exposure": true,
+    "provider": "MediaPipe Tasks FaceDetector (blaze_face_short_range.tflite)",
+    "field": "detections[0].categories[0].score",
+    "enforcement_mechanism": "Explicit webcam guard: detection_confidence < 0.50 triggers partial_face advisory and geometry masking.",
+    "test_sample_score": 0.865959882736206
   },
   "preprocessing_sequence": [
     "1. MediaPipe Face Landmarker (478 3D landmarks + 52 blendshapes + 4x4 matrix)",
