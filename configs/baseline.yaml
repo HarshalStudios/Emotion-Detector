@@ -1,0 +1,53 @@
+# Baseline Experiment Configuration (A0: Strong Spatial-Only Baseline)
+experiment:
+  name: "a0_spatial_baseline"
+  seed: 42
+  description: "ImageNet-pretrained spatial backbone fine-tuned on RAF-DB 7-class facial emotion recognition."
+
+model:
+  name: "spatial_baseline"
+  # MobileNetV3-Large is the current DEVELOPMENT default because of the constrained CPU environment. This is NOT the experimentally selected final backbone. Final backbone selection remains determined by the predefined baseline evaluation.
+  backbone: "mobilenet_v3_large"
+  candidate_pool:
+    - "convnext_tiny"
+    - "efficientnet_b0"
+    - "mobilenet_v3_large"
+  pretrained: true
+  num_classes: 7
+  dropout_rate: 0.2
+  input_resolution: [3, 224, 224]
+
+training:
+  epochs: 30
+  batch_size: 32
+  num_workers: 0
+  mixed_precision: true
+  early_stopping:
+    metric: "macro_f1"
+    mode: "max"
+    patience: 7
+    min_delta: 0.001
+
+optimizer:
+  type: "AdamW"
+  backbone_lr: 0.0001    # 1e-4 for pretrained feature extractor
+  head_lr: 0.001         # 1e-3 for newly initialized 7-class classification head
+  weight_decay: 0.01
+
+scheduler:
+  type: "cosine"
+  t_max: 30
+  eta_min: 0.000001      # 1e-6
+  warmup_epochs: 2
+
+loss:
+  type: "CrossEntropyLoss"
+  label_smoothing: 0.1
+  use_class_weights: true
+  class_weights_mode: "balanced"
+
+data:
+  parquet_path: "data/raw/raf-db/train-00000-of-00001.parquet"
+  train_manifest: "data/manifests/rafdb_train.csv"
+  val_manifest: "data/manifests/rafdb_val.csv"
+  test_manifest: "data/manifests/rafdb_test.csv"
