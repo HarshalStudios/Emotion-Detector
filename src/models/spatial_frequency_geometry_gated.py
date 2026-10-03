@@ -11,9 +11,9 @@ Implements research branch A5:
   to a 64-D geometry embedding, strictly modulated by a boolean geometry_valid mask.
 - Learned Gated Fusion: Per-sample dynamic branch gating network (Linear(1600, 128) -> LN -> GELU -> Linear(128, 3))
   producing inspectable softmax attention weights [g_spatial, g_freq, g_geom].
-  When geometry_valid is False, the geometry gate logit is masked to -torch.finfo(dtype).max, guaranteeing
-  that invalid geometry receives exactly 0.0 weight and the full probability mass is
-  dynamically redistributed between the spatial and frequency branches.
+  Gate calculation and softmax are performed entirely in FP32 with masked_fill(~geom_mask, -1e9),
+  guaranteeing that invalid geometry receives exactly 0.0 weight, gates are normalized to 1.0,
+  and no FP16 overflow can ever occur under mixed-precision CUDA training.
 - Classification Head: Multi-layer perceptron (Linear(1600, 512) -> LayerNorm -> Hardswish -> Dropout -> Linear(512, 7))
   producing exactly 7 canonical emotion logits.
 
@@ -48,17 +48,18 @@ class LearnedGatedFusion(nn.Module):
     Operation:
     1. Concatenates all branch embeddings: z = [spatial, freq, geom] in R^{B x 1600}.
     2. Passes z through a lightweight GateMLP to produce 3 branch logits s in R^{B x 3}.
-    3. Respects geometry validity:
-       When geometry_valid is False, the geometry logit is masked to -torch.finfo(dtype).max before softmax,
-       guaranteeing that invalid geometry receives exactly 0.0 gate attention and the
-       remaining probability mass (1.0) is dynamically redistributed between the
-       spatial and frequency branches. Safe against FP16/Half overflow under mixed precision.
-    4. Computes softmax gates: g = softmax(s, dim=-1) in R^{B x 3}.
-    5. Modulates each branch:
+    3. Performs gate masking and softmax entirely in FP32:
+       a. Upcasts gate_logits to FP32.
+       b. Applies masked_fill(~geom_mask, -1e9) in FP32.
+       c. Runs torch.softmax(..., dim=-1) in FP32.
+       d. Explicitly sets invalid geometry gates to exactly 0.0.
+       e. Renormalizes gates so every row sums to 1.0.
+       f. Casts final gates back to spatial_emb.dtype.
+    4. Modulates each branch:
        gated_spatial = g[:, 0:1] * spatial_emb
        gated_freq = g[:, 1:2] * freq_emb
        gated_geom = g[:, 2:3] * geom_emb
-    6. Returns fused_embedding = [gated_spatial, gated_freq, gated_geom] in R^{B x 1600}
+    5. Returns fused_embedding = [gated_spatial, gated_freq, gated_geom] in R^{B x 1600}
        and inspectable gates in R^{B x 3}.
     """
 
@@ -107,35 +108,40 @@ class LearnedGatedFusion(nn.Module):
         # 2. Compute raw branch gate logits
         gate_logits = self.gate_mlp(z)  # (B, 3)
 
-        # 3. Validity masking for geometry branch
+        # 1. Cast gate logits to FP32 for numerical stability and complete immunity to FP16/Half overflow
+        gate_logits_fp32 = gate_logits.float()
+
+        # 2. Apply masked_fill(~geom_mask, -1e9) to the FP32 tensor
         if geometry_valid is not None:
             geom_mask = geometry_valid.view(-1).bool()
-            # Where geometry is invalid, mask geometry logit using dtype-safe minimum value
-            # Prevents FP16/c10::Half overflow (where max value is 65504.0) during mixed precision training
-            masked_geom_logit = gate_logits[:, 2].masked_fill(
-                ~geom_mask, -torch.finfo(gate_logits.dtype).max
-            )
-            gate_logits = torch.stack(
-                [gate_logits[:, 0], gate_logits[:, 1], masked_geom_logit], dim=-1
+            masked_geom_logit = gate_logits_fp32[:, 2].masked_fill(~geom_mask, -1e9)
+            gate_logits_fp32 = torch.stack(
+                [gate_logits_fp32[:, 0], gate_logits_fp32[:, 1], masked_geom_logit], dim=-1
             )
 
-        # 4. Softmax over the 3 branches: sum(gates, dim=-1) == 1.0
-        gates = torch.softmax(gate_logits, dim=-1)  # (B, 3)
+        # 3. Run torch.softmax(..., dim=-1) in FP32
+        gates_fp32 = torch.softmax(gate_logits_fp32, dim=-1)  # (B, 3)
 
-        # Explicit zero-clamping for invalid geometry to eliminate numerical float32 residuals
+        # 4. Explicitly set invalid geometry gates to exactly 0.0
         if geometry_valid is not None:
-            geom_mask_f = geom_mask.to(dtype=gates.dtype).view(-1, 1)
-            g_spatial = gates[:, 0:1]
-            g_freq = gates[:, 1:2]
-            g_geom = gates[:, 2:3] * geom_mask_f
-            gates = torch.cat([g_spatial, g_freq, g_geom], dim=1)
+            geom_mask_f = geom_mask.to(dtype=gates_fp32.dtype).view(-1, 1)
+            g_spatial = gates_fp32[:, 0:1]
+            g_freq = gates_fp32[:, 1:2]
+            g_geom = gates_fp32[:, 2:3] * geom_mask_f
+            gates_fp32 = torch.cat([g_spatial, g_freq, g_geom], dim=1)
 
-        # 5. Modulate representations by learned gates
+        # 5. Renormalize gates so every row sums to 1
+        gates_fp32 = gates_fp32 / (gates_fp32.sum(dim=-1, keepdim=True) + 1e-12)
+
+        # 6. Cast the final gates back to spatial_emb.dtype before branch multiplication
+        gates = gates_fp32.to(dtype=spatial_emb.dtype)
+
+        # Modulate representations by learned gates
         gated_spatial = gates[:, 0:1] * spatial_emb  # (B, 1280)
         gated_freq = gates[:, 1:2] * freq_emb        # (B, 256)
         gated_geom = gates[:, 2:3] * geom_emb        # (B, 64)
 
-        # 6. Concatenate gated representations
+        # Concatenate gated representations
         fused_embedding = torch.cat([gated_spatial, gated_freq, gated_geom], dim=1)  # (B, 1600)
 
         return fused_embedding, gates
