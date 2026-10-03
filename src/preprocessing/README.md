@@ -9,7 +9,7 @@ This directory will contain the single, unified preprocessing pipeline shared id
 
 Pipeline stages:
 - Face detection & canonical landmark localization
-- Similarity transformation / 5-point alignment
+- 5-point roll-based rigid rotation alignment
 - Margin expansion and square aspect-ratio cropping
 - Bilinear resizing to 224x224
 - Partial-face validation & filtering

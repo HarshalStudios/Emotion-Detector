@@ -51,6 +51,9 @@ def test_a_dataset_successful_detection():
     assert res["fallback_used"] is False, "Test A FAILED: fallback_used should be False"
     assert res["image_tensor"] is not None, "Test A FAILED: image_tensor should not be None"
     assert res["image_tensor"].shape == (3, 224, 224), "Test A FAILED: image_tensor shape mismatch"
+    assert res["aligned_image_rgb"] is not None, "Test A FAILED: aligned_image_rgb should not be None"
+    assert res["aligned_image_rgb"].shape == (224, 224, 3), "Test A FAILED: aligned_image_rgb shape mismatch"
+    assert res["aligned_image_rgb"].dtype == np.uint8, "Test A FAILED: aligned_image_rgb dtype mismatch"
     assert res["geometry_valid"] is True, "Test A FAILED: geometry_valid should be True"
     print("  --> PASS: Test A passed successfully.")
 
@@ -78,6 +81,9 @@ def test_b_dataset_simulated_zero_face():
     assert res["image_tensor"] is not None, "Test B FAILED: image_tensor must be present"
     assert res["image_tensor"].shape == (3, 224, 224), "Test B FAILED: tensor shape must be (3, 224, 224)"
     assert res["image_tensor"].dtype == np.float32, "Test B FAILED: tensor dtype must be float32"
+    assert res["aligned_image_rgb"] is not None, "Test B FAILED: aligned_image_rgb must be present in fallback"
+    assert res["aligned_image_rgb"].shape == (224, 224, 3), "Test B FAILED: aligned_image_rgb shape mismatch"
+    assert res["aligned_image_rgb"].dtype == np.uint8, "Test B FAILED: aligned_image_rgb dtype mismatch"
     assert res["geometry_valid"] is False, "Test B FAILED: geometry_valid must be False"
     assert np.all(res["geometry_vector"] == 0.0), "Test B FAILED: geometry_vector must be all zeros"
     assert res["bbox"] is None, "Test B FAILED: bbox must be None"
@@ -105,6 +111,7 @@ def test_c_webcam_zero_face():
     assert res["face_detected"] is False, "Test C FAILED: face_detected must be False"
     assert res["fallback_used"] is False, "Test C FAILED: fallback_used must be False on webcam"
     assert res["image_tensor"] is None, "Test C FAILED: image_tensor must be None on webcam no-face"
+    assert res["aligned_image_rgb"] is None, "Test C FAILED: aligned_image_rgb must be None on webcam no-face"
     assert res["geometry_valid"] is False, "Test C FAILED: geometry_valid must be False"
     assert np.all(res["geometry_vector"] == 0.0), "Test C FAILED: geometry_vector must be all zeros"
     print("  --> PASS: Test C passed successfully (webcam invariance preserved).")

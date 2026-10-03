@@ -130,7 +130,7 @@ export default function App() {
             </div>
             <div className="bg-slate-800/40 p-3 rounded border border-slate-800">
               <span className="text-slate-400 block mb-0.5">Alignment Method</span>
-              <span className="font-semibold text-white">5-Point Similarity (Rigid)</span>
+              <span className="font-semibold text-white">5-Point Roll-Based Rigid Rotation</span>
             </div>
             <div className="bg-slate-800/40 p-3 rounded border border-slate-800">
               <span className="text-slate-400 block mb-0.5">Margin Factor</span>

@@ -9,6 +9,10 @@ import sys
 if os.path.exists("/app/applet/pylib") and "/app/applet/pylib" not in sys.path:
     sys.path.insert(0, "/app/applet/pylib")
 
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
+
 import json
 import math
 import cv2
@@ -166,7 +170,7 @@ def run_audit():
         "preprocessing_sequence": [
             "1. MediaPipe Face Landmarker (478 3D landmarks + 52 blendshapes + 4x4 matrix)",
             "2. Multi-face largest area selection (w * h)",
-            "3. 5-point canonical similarity alignment (rigid Euclidean rotation to horizontal inter-ocular axis)",
+            "3. 5-point roll-based rigid rotation alignment (rigid Euclidean rotation to horizontal inter-ocular axis)",
             "4. 1.30 margin crop around aligned face bounding box",
             "5. 224x224 bilinear resize (cv2.INTER_LINEAR)",
             "6. ImageNet normalization (mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]) -> (3, 224, 224) float32",

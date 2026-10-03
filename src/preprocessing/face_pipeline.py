@@ -2,7 +2,7 @@
 Face Preprocessing Pipeline Module
 Strictly implements the locked Step 1 & 2 Specification with full API honesty:
 1. MediaPipe Face Landmarker detection (with multi-face largest area rule)
-2. 5-Point Similarity Alignment (rotates face to horizontal inter-ocular axis)
+2. 5-point roll-based rigid rotation alignment (rotates face to horizontal inter-ocular axis)
 3. 1.30 Margin Crop (symmetric square bounding box expansion around aligned face)
 4. 224x224 Bilinear Resize
 5. ImageNet Normalization -> (3, 224, 224) float32 tensor
@@ -89,29 +89,93 @@ class FacePipeline:
     Ensures identical tensor generation across training, testing, and real-time inference.
     """
 
+    @staticmethod
+    def _resolve_model_path(
+        explicit_path: Optional[str],
+        env_var: str,
+        rel_filename: str,
+        model_name: str,
+    ) -> str:
+        """
+        Resolves model file path portably:
+        1. Explicit path if supplied and exists on disk.
+        2. Environment variable if set and exists on disk.
+        3. Relative to repository root (anchored via this source file's location).
+        4. Relative to current working directory.
+        5. Legacy /app/applet container path.
+        Fails with a clear FileNotFoundError if not found.
+        """
+        candidates: List[str] = []
+
+        if explicit_path:
+            norm_explicit = os.path.abspath(explicit_path)
+            candidates.append(norm_explicit)
+            if os.path.exists(explicit_path):
+                return norm_explicit
+
+        if env_var in os.environ and os.environ[env_var]:
+            norm_env = os.path.abspath(os.environ[env_var])
+            candidates.append(norm_env)
+            if os.path.exists(os.environ[env_var]):
+                return norm_env
+
+        # Candidate relative to repository root (src/preprocessing/../.. -> repo root)
+        repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+        repo_candidate = os.path.join(repo_root, rel_filename)
+        candidates.append(repo_candidate)
+        if os.path.exists(repo_candidate):
+            return repo_candidate
+
+        # Candidate relative to current working directory
+        cwd_candidate = os.path.abspath(rel_filename)
+        if cwd_candidate not in candidates:
+            candidates.append(cwd_candidate)
+        if os.path.exists(cwd_candidate):
+            return cwd_candidate
+
+        # Candidate in legacy /app/applet container
+        legacy_candidate = os.path.join("/app/applet", rel_filename)
+        if legacy_candidate not in candidates:
+            candidates.append(legacy_candidate)
+        if os.path.exists(legacy_candidate):
+            return legacy_candidate
+
+        checked = "\n  - " + "\n  - ".join(candidates)
+        raise FileNotFoundError(
+            f"Required {model_name} file could not be found.\n"
+            f"Checked locations:{checked}\n"
+            f"Please ensure '{rel_filename}' is present in the repository or specify a valid path via argument or {env_var}."
+        )
+
     def __init__(
         self,
-        model_path: str = "/app/applet/models/mediapipe/face_landmarker.task",
-        detector_model_path: str = "/app/applet/models/mediapipe/blaze_face_short_range.tflite",
+        model_path: Optional[str] = None,
+        detector_model_path: Optional[str] = None,
         target_size: int = 224,
         margin_factor: float = 1.30,
     ):
         self.target_size = target_size
         self.margin_factor = margin_factor
-        self.model_path = model_path
-        self.detector_model_path = detector_model_path
+        self.model_path = self._resolve_model_path(
+            model_path,
+            env_var="MEDIAPIPE_LANDMARKER_PATH",
+            rel_filename="models/mediapipe/face_landmarker.task",
+            model_name="MediaPipe Face Landmarker (.task)",
+        )
+        self.detector_model_path = self._resolve_model_path(
+            detector_model_path,
+            env_var="MEDIAPIPE_DETECTOR_PATH",
+            rel_filename="models/mediapipe/blaze_face_short_range.tflite",
+            model_name="MediaPipe Face Detector (.tflite)",
+        )
         self._landmarker = None
         self._detector = None
 
-        if os.path.exists(model_path):
-            self._init_landmarker(model_path)
-        elif os.path.exists("models/mediapipe/face_landmarker.task"):
-            self._init_landmarker("models/mediapipe/face_landmarker.task")
+        if self.model_path and os.path.exists(self.model_path):
+            self._init_landmarker(self.model_path)
 
-        if os.path.exists(detector_model_path):
-            self._init_detector(detector_model_path)
-        elif os.path.exists("models/mediapipe/blaze_face_short_range.tflite"):
-            self._init_detector("models/mediapipe/blaze_face_short_range.tflite")
+        if self.detector_model_path and os.path.exists(self.detector_model_path):
+            self._init_detector(self.detector_model_path)
 
     def _init_detector(self, model_path: str) -> None:
         from mediapipe.tasks import python
@@ -166,7 +230,7 @@ class FacePipeline:
     ) -> Tuple[np.ndarray, np.ndarray, Dict[str, Any]]:
         """
         Explicit production sequence:
-        Stage 1: 5-point similarity alignment (rotates face to horizontal inter-ocular axis)
+        Stage 1: 5-point roll-based rigid rotation alignment (rotates face to horizontal inter-ocular axis)
         Stage 2: 1.30 margin crop around aligned face bounding box
         Stage 3: 224x224 bilinear resize
         Stage 4: ImageNet normalization
@@ -180,7 +244,7 @@ class FacePipeline:
         right_eye = src_5pts[0]
         left_eye = src_5pts[1]
 
-        # Stage 1: 5-Point Similarity Alignment (Euclidean rigid rotation)
+        # Stage 1: 5-point roll-based rigid rotation alignment (Euclidean rigid rotation)
         # Compute roll angle to make inter-ocular line horizontal
         dY = float(left_eye[1] - right_eye[1])
         dX = float(left_eye[0] - right_eye[0])
@@ -190,7 +254,7 @@ class FacePipeline:
         pivot = np.mean(src_5pts, axis=0)
         pivot_tuple = (float(pivot[0]), float(pivot[1]))
 
-        # Construct 2D affine rotation matrix (similarity transform with scale 1.0)
+        # Construct 2D affine rotation matrix (5-point roll-based rigid rotation with scale 1.0)
         M_rot = cv2.getRotationMatrix2D(pivot_tuple, roll_angle_deg, scale=1.0)
 
         # Warp full image to aligned horizontal orientation
@@ -309,6 +373,7 @@ class FacePipeline:
                 fallback_used: bool (True if dataset fallback was required when zero faces detected)
                 partial_face: bool (True only on webcam if conditions violated)
                 image_tensor: Optional[np.ndarray] of shape (3, 224, 224), float32 ImageNet normalized
+                aligned_image_rgb: Optional[np.ndarray] of shape (224, 224, 3), uint8 pre-normalization crop
                 geometry_vector: np.ndarray of shape (62,), float32 (zero-masked if partial/invalid/fallback)
                 geometry_valid: bool (1 if geometry is active, 0 if masked/fallback)
                 head_pose: Dict[str, float] with pitch, yaw, roll in degrees
@@ -345,6 +410,7 @@ class FacePipeline:
                     "fallback_used": True,
                     "partial_face": False,
                     "image_tensor": image_tensor,
+                    "aligned_image_rgb": resized_rgb,
                     "geometry_vector": np.zeros(62, dtype=np.float32),
                     "geometry_valid": False,
                     "head_pose": {"pitch": 0.0, "yaw": 0.0, "roll": 0.0},
@@ -365,6 +431,7 @@ class FacePipeline:
                     "fallback_used": False,
                     "partial_face": False,
                     "image_tensor": None,
+                    "aligned_image_rgb": None,
                     "geometry_vector": np.zeros(62, dtype=np.float32),
                     "geometry_valid": False,
                     "head_pose": {"pitch": 0.0, "yaw": 0.0, "roll": 0.0},
@@ -457,6 +524,7 @@ class FacePipeline:
             "fallback_used": False,
             "partial_face": partial_face,
             "image_tensor": image_tensor,
+            "aligned_image_rgb": aligned_crop_rgb,
             "geometry_vector": geom_vec,
             "geometry_valid": geometry_valid,
             "head_pose": {"pitch": pitch, "yaw": yaw, "roll": roll},
@@ -481,6 +549,7 @@ class FacePipeline:
             "fallback_used": True,
             "partial_face": False,
             "image_tensor": image_tensor,
+            "aligned_image_rgb": resized,
             "geometry_vector": np.zeros(62, dtype=np.float32),
             "geometry_valid": False,
             "head_pose": {"pitch": 0.0, "yaw": 0.0, "roll": 0.0},
