@@ -47,6 +47,8 @@ loss:
   class_weights_mode: "balanced"
 
 data:
+  use_cache: true
+  cache_dir: "data/cache/rafdb_cache"
   parquet_path: "data/raw/raf-db/train-00000-of-00001.parquet"
   train_manifest: "data/manifests/rafdb_train.csv"
   val_manifest: "data/manifests/rafdb_val.csv"
