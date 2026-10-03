@@ -11,7 +11,7 @@ Implements research branch A5:
   to a 64-D geometry embedding, strictly modulated by a boolean geometry_valid mask.
 - Learned Gated Fusion: Per-sample dynamic branch gating network (Linear(1600, 128) -> LN -> GELU -> Linear(128, 3))
   producing inspectable softmax attention weights [g_spatial, g_freq, g_geom].
-  When geometry_valid is False, the geometry gate logit is masked to -1e9, guaranteeing
+  When geometry_valid is False, the geometry gate logit is masked to -torch.finfo(dtype).max, guaranteeing
   that invalid geometry receives exactly 0.0 weight and the full probability mass is
   dynamically redistributed between the spatial and frequency branches.
 - Classification Head: Multi-layer perceptron (Linear(1600, 512) -> LayerNorm -> Hardswish -> Dropout -> Linear(512, 7))
@@ -49,10 +49,10 @@ class LearnedGatedFusion(nn.Module):
     1. Concatenates all branch embeddings: z = [spatial, freq, geom] in R^{B x 1600}.
     2. Passes z through a lightweight GateMLP to produce 3 branch logits s in R^{B x 3}.
     3. Respects geometry validity:
-       When geometry_valid is False, the geometry logit is masked to -1e9 before softmax,
+       When geometry_valid is False, the geometry logit is masked to -torch.finfo(dtype).max before softmax,
        guaranteeing that invalid geometry receives exactly 0.0 gate attention and the
        remaining probability mass (1.0) is dynamically redistributed between the
-       spatial and frequency branches.
+       spatial and frequency branches. Safe against FP16/Half overflow under mixed precision.
     4. Computes softmax gates: g = softmax(s, dim=-1) in R^{B x 3}.
     5. Modulates each branch:
        gated_spatial = g[:, 0:1] * spatial_emb
@@ -110,8 +110,11 @@ class LearnedGatedFusion(nn.Module):
         # 3. Validity masking for geometry branch
         if geometry_valid is not None:
             geom_mask = geometry_valid.view(-1).bool()
-            # Where geometry is invalid, mask geometry logit to -1e9
-            masked_geom_logit = gate_logits[:, 2].masked_fill(~geom_mask, -1e9)
+            # Where geometry is invalid, mask geometry logit using dtype-safe minimum value
+            # Prevents FP16/c10::Half overflow (where max value is 65504.0) during mixed precision training
+            masked_geom_logit = gate_logits[:, 2].masked_fill(
+                ~geom_mask, -torch.finfo(gate_logits.dtype).max
+            )
             gate_logits = torch.stack(
                 [gate_logits[:, 0], gate_logits[:, 1], masked_geom_logit], dim=-1
             )
