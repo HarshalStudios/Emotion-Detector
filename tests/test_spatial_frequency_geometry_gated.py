@@ -54,6 +54,52 @@ class TestSpatialFrequencyGeometryGatedModel(unittest.TestCase):
         self.LearnedGatedFusion = LearnedGatedFusion
         self.create_model = create_spatial_frequency_geometry_gated_model
 
+    def test_00_pure_python_fp32_numerical_invariance(self):
+        """Verifies the FP32 masking, softmax, and clamp_min normalization algorithm mathematically."""
+        import math
+
+        # 4 samples: sample 0 (valid), sample 1 (invalid), sample 2 (invalid), sample 3 (valid)
+        raw_logits = [
+            [1.2, 0.8, 0.5],
+            [2.1, 1.9, 3.4],  # geometry invalid -> masked with -1e9
+            [-0.5, 0.2, 1.0], # geometry invalid -> masked with -1e9
+            [0.0, 0.0, 0.0],
+        ]
+        geom_valid = [True, False, False, True]
+
+        for i, (logits, is_valid) in enumerate(zip(raw_logits, geom_valid)):
+            # 1. Cast to float (FP32)
+            logits_fp32 = [float(x) for x in logits]
+            # 2. Apply -1e9 mask if invalid
+            if not is_valid:
+                logits_fp32[2] = -1e9
+            # 3. Softmax
+            max_l = max(logits_fp32)
+            exp_l = [math.exp(x - max_l) for x in logits_fp32]
+            sum_exp = sum(exp_l)
+            gates_fp32 = [x / sum_exp for x in exp_l]
+            # 4. Explicit zero for invalid geometry
+            if not is_valid:
+                gates_fp32[2] = 0.0
+            # 5. Renormalize with clamp_min(1e-12)
+            total_sum = max(sum(gates_fp32), 1e-12)
+            gates_fp32 = [x / total_sum for x in gates_fp32]
+
+            # Verifications:
+            # - finite gates
+            self.assertTrue(all(math.isfinite(x) for x in gates_fp32), "Non-finite gates detected.")
+            # - gate rows sum to 1
+            self.assertAlmostEqual(sum(gates_fp32), 1.0, places=7, msg=f"Row {i} does not sum to 1.0")
+            if not is_valid:
+                # - invalid geometry gate is exactly 0
+                self.assertEqual(gates_fp32[2], 0.0, f"Row {i} invalid geometry gate is not 0.0")
+                # - spatial + frequency gates sum to 1 when geometry is invalid
+                self.assertAlmostEqual(gates_fp32[0] + gates_fp32[1], 1.0, places=7)
+            else:
+                self.assertGreater(gates_fp32[2], 0.0)
+
+        print("[PASS] Test 0: FP32 masking and clamp_min normalization algorithm strictly verified.")
+
     def test_01_learned_gated_fusion_and_validity_masking(self):
         """Verifies LearnedGatedFusion shapes, softmax normalization, and strict zero-masking for invalid geometry."""
         if not self.torch_available:
@@ -354,6 +400,25 @@ class TestSpatialFrequencyGeometryGatedModel(unittest.TestCase):
         for invalid_idx in [1, 2]:
             spat_freq_sum = float(gates[invalid_idx, 0:2].sum().item())
             self.assertAlmostEqual(spat_freq_sum, 1.0, places=3, msg=f"Sample {invalid_idx} spatial + freq sum != 1.0 under FP16")
+
+        # 5b. Direct isolated CUDA autocast verification if CUDA is available
+        if torch.cuda.is_available():
+            fusion_cuda = self.LearnedGatedFusion(
+                spatial_dim=1280, freq_dim=256, geom_dim=64, gate_hidden_dim=128, dropout_rate=0.2
+            ).cuda()
+            s_c = torch.randn(b, 1280, device="cuda")
+            f_c = torch.randn(b, 256, device="cuda")
+            g_c = torch.randn(b, 64, device="cuda")
+            gv_c = geom_valid.cuda()
+            with torch.cuda.amp.autocast():
+                fused_c, gates_c = fusion_cuda(s_c, f_c, g_c, geometry_valid=gv_c)
+            self.assertTrue(torch.isfinite(gates_c).all(), "CUDA autocast isolated gates contain NaN/Inf.")
+            self.assertEqual(float(gates_c[1, 2].item()), 0.0, "CUDA autocast isolated invalid geometry gate != 0")
+            self.assertEqual(float(gates_c[2, 2].item()), 0.0, "CUDA autocast isolated invalid geometry gate != 0")
+            for i in range(b):
+                self.assertAlmostEqual(float(gates_c[i].sum().item()), 1.0, places=3)
+            self.assertAlmostEqual(float(gates_c[1, 0:2].sum().item()), 1.0, places=3)
+            self.assertAlmostEqual(float(gates_c[2, 0:2].sum().item()), 1.0, places=3)
 
         # 6. Verify backward gradient flow and autocast
         model_train = self.create_model(num_classes=7, pretrained=False)

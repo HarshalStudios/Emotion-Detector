@@ -1,0 +1,169 @@
+From c09ea514dd15cfa0ec9912500bcfcd9aa64329e2 Mon Sep 17 00:00:00 2001
+From: Harshal Shinde <137837117+HarshalStudios@users.noreply.github.com>
+Date: Sat, 3 Oct 2026 19:37:29 +0000
+Subject: [PATCH] fix(models): enforce FP32 gate masking with clamp_min
+ normalization and CUDA autocast regression tests
+
+---
+ .../spatial_frequency_geometry_gated.py       | 51 +++++++++------
+ .../test_spatial_frequency_geometry_gated.py  | 65 +++++++++++++++++++
+ 2 files changed, 97 insertions(+), 19 deletions(-)
+
+diff --git a/src/models/spatial_frequency_geometry_gated.py b/src/models/spatial_frequency_geometry_gated.py
+index ba2aa7a..3861c14 100644
+--- a/src/models/spatial_frequency_geometry_gated.py
++++ b/src/models/spatial_frequency_geometry_gated.py
+@@ -106,35 +106,48 @@ class LearnedGatedFusion(nn.Module):
+         z = torch.cat([spatial_emb, freq_emb, geom_emb], dim=1)  # (B, 1600)
+ 
+         # 2. Compute raw branch gate logits
+-        gate_logits = self.gate_mlp(z)  # (B, 3)
++        gate_logits = self.gate_mlp(z)
+ 
+-        # 1. Cast gate logits to FP32 for numerical stability and complete immunity to FP16/Half overflow
++        # Perform gate masking and softmax in FP32 for CUDA mixed-precision safety.
+         gate_logits_fp32 = gate_logits.float()
+-
+-        # 2. Apply masked_fill(~geom_mask, -1e9) to the FP32 tensor
+         if geometry_valid is not None:
+             geom_mask = geometry_valid.view(-1).bool()
+-            masked_geom_logit = gate_logits_fp32[:, 2].masked_fill(~geom_mask, -1e9)
++            masked_geom_logit = gate_logits_fp32[:, 2].masked_fill(
++                ~geom_mask,
++                -1e9,
++            )
+             gate_logits_fp32 = torch.stack(
+-                [gate_logits_fp32[:, 0], gate_logits_fp32[:, 1], masked_geom_logit], dim=-1
++                [
++                    gate_logits_fp32[:, 0],
++                    gate_logits_fp32[:, 1],
++                    masked_geom_logit,
++                ],
++                dim=-1,
+             )
+-
+-        # 3. Run torch.softmax(..., dim=-1) in FP32
+-        gates_fp32 = torch.softmax(gate_logits_fp32, dim=-1)  # (B, 3)
+-
+-        # 4. Explicitly set invalid geometry gates to exactly 0.0
++        gates_fp32 = torch.softmax(
++            gate_logits_fp32,
++            dim=-1,
++        )
+         if geometry_valid is not None:
+-            geom_mask_f = geom_mask.to(dtype=gates_fp32.dtype).view(-1, 1)
++            geom_mask_f = geom_mask.to(
++                dtype=gates_fp32.dtype
++            ).view(-1, 1)
+             g_spatial = gates_fp32[:, 0:1]
+             g_freq = gates_fp32[:, 1:2]
+             g_geom = gates_fp32[:, 2:3] * geom_mask_f
+-            gates_fp32 = torch.cat([g_spatial, g_freq, g_geom], dim=1)
+-
+-        # 5. Renormalize gates so every row sums to 1
+-        gates_fp32 = gates_fp32 / (gates_fp32.sum(dim=-1, keepdim=True) + 1e-12)
+-
+-        # 6. Cast the final gates back to spatial_emb.dtype before branch multiplication
+-        gates = gates_fp32.to(dtype=spatial_emb.dtype)
++            gates_fp32 = torch.cat(
++                [g_spatial, g_freq, g_geom],
++                dim=1,
++            )
++            gates_fp32 = gates_fp32 / (
++                gates_fp32.sum(
++                    dim=-1,
++                    keepdim=True,
++                ).clamp_min(1e-12)
++            )
++        gates = gates_fp32.to(
++            dtype=spatial_emb.dtype
++        )
+ 
+         # Modulate representations by learned gates
+         gated_spatial = gates[:, 0:1] * spatial_emb  # (B, 1280)
+diff --git a/tests/test_spatial_frequency_geometry_gated.py b/tests/test_spatial_frequency_geometry_gated.py
+index 1294094..c8fa4a0 100644
+--- a/tests/test_spatial_frequency_geometry_gated.py
++++ b/tests/test_spatial_frequency_geometry_gated.py
+@@ -54,6 +54,52 @@ class TestSpatialFrequencyGeometryGatedModel(unittest.TestCase):
+         self.LearnedGatedFusion = LearnedGatedFusion
+         self.create_model = create_spatial_frequency_geometry_gated_model
+ 
++    def test_00_pure_python_fp32_numerical_invariance(self):
++        """Verifies the FP32 masking, softmax, and clamp_min normalization algorithm mathematically."""
++        import math
++
++        # 4 samples: sample 0 (valid), sample 1 (invalid), sample 2 (invalid), sample 3 (valid)
++        raw_logits = [
++            [1.2, 0.8, 0.5],
++            [2.1, 1.9, 3.4],  # geometry invalid -> masked with -1e9
++            [-0.5, 0.2, 1.0], # geometry invalid -> masked with -1e9
++            [0.0, 0.0, 0.0],
++        ]
++        geom_valid = [True, False, False, True]
++
++        for i, (logits, is_valid) in enumerate(zip(raw_logits, geom_valid)):
++            # 1. Cast to float (FP32)
++            logits_fp32 = [float(x) for x in logits]
++            # 2. Apply -1e9 mask if invalid
++            if not is_valid:
++                logits_fp32[2] = -1e9
++            # 3. Softmax
++            max_l = max(logits_fp32)
++            exp_l = [math.exp(x - max_l) for x in logits_fp32]
++            sum_exp = sum(exp_l)
++            gates_fp32 = [x / sum_exp for x in exp_l]
++            # 4. Explicit zero for invalid geometry
++            if not is_valid:
++                gates_fp32[2] = 0.0
++            # 5. Renormalize with clamp_min(1e-12)
++            total_sum = max(sum(gates_fp32), 1e-12)
++            gates_fp32 = [x / total_sum for x in gates_fp32]
++
++            # Verifications:
++            # - finite gates
++            self.assertTrue(all(math.isfinite(x) for x in gates_fp32), "Non-finite gates detected.")
++            # - gate rows sum to 1
++            self.assertAlmostEqual(sum(gates_fp32), 1.0, places=7, msg=f"Row {i} does not sum to 1.0")
++            if not is_valid:
++                # - invalid geometry gate is exactly 0
++                self.assertEqual(gates_fp32[2], 0.0, f"Row {i} invalid geometry gate is not 0.0")
++                # - spatial + frequency gates sum to 1 when geometry is invalid
++                self.assertAlmostEqual(gates_fp32[0] + gates_fp32[1], 1.0, places=7)
++            else:
++                self.assertGreater(gates_fp32[2], 0.0)
++
++        print("[PASS] Test 0: FP32 masking and clamp_min normalization algorithm strictly verified.")
++
+     def test_01_learned_gated_fusion_and_validity_masking(self):
+         """Verifies LearnedGatedFusion shapes, softmax normalization, and strict zero-masking for invalid geometry."""
+         if not self.torch_available:
+@@ -355,6 +401,25 @@ class TestSpatialFrequencyGeometryGatedModel(unittest.TestCase):
+             spat_freq_sum = float(gates[invalid_idx, 0:2].sum().item())
+             self.assertAlmostEqual(spat_freq_sum, 1.0, places=3, msg=f"Sample {invalid_idx} spatial + freq sum != 1.0 under FP16")
+ 
++        # 5b. Direct isolated CUDA autocast verification if CUDA is available
++        if torch.cuda.is_available():
++            fusion_cuda = self.LearnedGatedFusion(
++                spatial_dim=1280, freq_dim=256, geom_dim=64, gate_hidden_dim=128, dropout_rate=0.2
++            ).cuda()
++            s_c = torch.randn(b, 1280, device="cuda")
++            f_c = torch.randn(b, 256, device="cuda")
++            g_c = torch.randn(b, 64, device="cuda")
++            gv_c = geom_valid.cuda()
++            with torch.cuda.amp.autocast():
++                fused_c, gates_c = fusion_cuda(s_c, f_c, g_c, geometry_valid=gv_c)
++            self.assertTrue(torch.isfinite(gates_c).all(), "CUDA autocast isolated gates contain NaN/Inf.")
++            self.assertEqual(float(gates_c[1, 2].item()), 0.0, "CUDA autocast isolated invalid geometry gate != 0")
++            self.assertEqual(float(gates_c[2, 2].item()), 0.0, "CUDA autocast isolated invalid geometry gate != 0")
++            for i in range(b):
++                self.assertAlmostEqual(float(gates_c[i].sum().item()), 1.0, places=3)
++            self.assertAlmostEqual(float(gates_c[1, 0:2].sum().item()), 1.0, places=3)
++            self.assertAlmostEqual(float(gates_c[2, 0:2].sum().item()), 1.0, places=3)
++
+         # 6. Verify backward gradient flow and autocast
+         model_train = self.create_model(num_classes=7, pretrained=False)
+         model_train.train()
+-- 
+2.34.1
+

@@ -106,35 +106,48 @@ class LearnedGatedFusion(nn.Module):
         z = torch.cat([spatial_emb, freq_emb, geom_emb], dim=1)  # (B, 1600)
 
         # 2. Compute raw branch gate logits
-        gate_logits = self.gate_mlp(z)  # (B, 3)
+        gate_logits = self.gate_mlp(z)
 
-        # 1. Cast gate logits to FP32 for numerical stability and complete immunity to FP16/Half overflow
+        # Perform gate masking and softmax in FP32 for CUDA mixed-precision safety.
         gate_logits_fp32 = gate_logits.float()
-
-        # 2. Apply masked_fill(~geom_mask, -1e9) to the FP32 tensor
         if geometry_valid is not None:
             geom_mask = geometry_valid.view(-1).bool()
-            masked_geom_logit = gate_logits_fp32[:, 2].masked_fill(~geom_mask, -1e9)
-            gate_logits_fp32 = torch.stack(
-                [gate_logits_fp32[:, 0], gate_logits_fp32[:, 1], masked_geom_logit], dim=-1
+            masked_geom_logit = gate_logits_fp32[:, 2].masked_fill(
+                ~geom_mask,
+                -1e9,
             )
-
-        # 3. Run torch.softmax(..., dim=-1) in FP32
-        gates_fp32 = torch.softmax(gate_logits_fp32, dim=-1)  # (B, 3)
-
-        # 4. Explicitly set invalid geometry gates to exactly 0.0
+            gate_logits_fp32 = torch.stack(
+                [
+                    gate_logits_fp32[:, 0],
+                    gate_logits_fp32[:, 1],
+                    masked_geom_logit,
+                ],
+                dim=-1,
+            )
+        gates_fp32 = torch.softmax(
+            gate_logits_fp32,
+            dim=-1,
+        )
         if geometry_valid is not None:
-            geom_mask_f = geom_mask.to(dtype=gates_fp32.dtype).view(-1, 1)
+            geom_mask_f = geom_mask.to(
+                dtype=gates_fp32.dtype
+            ).view(-1, 1)
             g_spatial = gates_fp32[:, 0:1]
             g_freq = gates_fp32[:, 1:2]
             g_geom = gates_fp32[:, 2:3] * geom_mask_f
-            gates_fp32 = torch.cat([g_spatial, g_freq, g_geom], dim=1)
-
-        # 5. Renormalize gates so every row sums to 1
-        gates_fp32 = gates_fp32 / (gates_fp32.sum(dim=-1, keepdim=True) + 1e-12)
-
-        # 6. Cast the final gates back to spatial_emb.dtype before branch multiplication
-        gates = gates_fp32.to(dtype=spatial_emb.dtype)
+            gates_fp32 = torch.cat(
+                [g_spatial, g_freq, g_geom],
+                dim=1,
+            )
+            gates_fp32 = gates_fp32 / (
+                gates_fp32.sum(
+                    dim=-1,
+                    keepdim=True,
+                ).clamp_min(1e-12)
+            )
+        gates = gates_fp32.to(
+            dtype=spatial_emb.dtype
+        )
 
         # Modulate representations by learned gates
         gated_spatial = gates[:, 0:1] * spatial_emb  # (B, 1280)
