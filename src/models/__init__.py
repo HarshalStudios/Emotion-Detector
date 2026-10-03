@@ -16,6 +16,11 @@ from src.models.spatial_frequency_geometry import (
     create_spatial_frequency_geometry_model,
     GeometryBranch,
 )
+from src.models.spatial_frequency_geometry_gated import (
+    SpatialFrequencyGeometryGatedModel,
+    create_spatial_frequency_geometry_gated_model,
+    LearnedGatedFusion,
+)
 
 __all__ = [
     "SpatialBaseline",
@@ -28,4 +33,7 @@ __all__ = [
     "SpatialFrequencyGeometryModel",
     "create_spatial_frequency_geometry_model",
     "GeometryBranch",
+    "SpatialFrequencyGeometryGatedModel",
+    "create_spatial_frequency_geometry_gated_model",
+    "LearnedGatedFusion",
 ]

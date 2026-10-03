@@ -106,8 +106,50 @@ Combines spatial representations, 2D Fourier spectral representations, and 62-D 
 
 ---
 
-## 4. Strict Experimental Isolation
+## 4. Experiment A5: Spatial + Frequency + Geometry with Learned Gated Fusion (`spatial_frequency_geometry_gated.py`)
+Replaces plain concatenation with an inspectable learned gated fusion mechanism to dynamically balance visual semantics, high-frequency textural cues, and geometric landmark deformations per face sample.
+
+### Architecture Overview
+1. **Spatial Branch (`MobileNetV3-Large`)**:
+   - Same pretrained MobileNetV3-Large backbone (1280-D spatial embedding).
+   - Parameters: **4,202,032** parameters.
+
+2. **Frequency Branch (`FrequencyBranch`)**:
+   - Exact same 2D rFFT + learnable spectral filter + 4-stage convolutional encoder (256-D frequency embedding).
+   - Parameters: **607,072** parameters.
+
+3. **Geometry Branch (`GeometryBranch`)**:
+   - Same 62-D $\to$ 128-D $\to$ 64-D geometry MLP with validity masking.
+   - Parameters: **16,704** parameters.
+
+4. **Learned Gated Fusion Module (`LearnedGatedFusion`)**:
+   - Joint Representation: $[e_{\text{spatial}}, e_{\text{freq}}, e_{\text{geom}}] \in \mathbb{R}^{B \times 1600}$.
+   - Gate Network: `Linear(1600, 128)` + `LayerNorm(128)` + `GELU()` + `Dropout(0.2)` + `Linear(128, 3)`.
+   - **Validity-Aware Masking**:
+     - When `geometry_valid == False`, the geometry logit is masked to $-10^9$ before Softmax.
+     - As a result, $g_{\text{geom}} \equiv 0.0$ strictly, and $100\%$ of gate attention is dynamically distributed between the spatial and frequency branches ($g_{\text{spatial}} + g_{\text{freq}} = 1.0$).
+   - Output: Modulated fused representation $(B, 1600)$ and inspectable gate tensor $(B, 3)$.
+   - Parameters: **205,571** parameters.
+
+5. **Classification Head (`fusion_head`)**:
+   - `Linear(1600, 512)` + `LayerNorm(512)` + `Hardswish()` + `Dropout(0.2)` + `Linear(512, 7)`.
+   - Parameters: **824,327** parameters.
+
+### Total Parameter Summary (Experiment A5)
+| Branch / Component | Input Tensor | Output Tensor | Parameter Count |
+| :--- | :--- | :--- | :--- |
+| **Spatial Branch** (`MobileNetV3-Large`) | $(B, 3, 224, 224)$ | $(B, 1280)$ | 4,202,032 |
+| **Frequency Branch** (Spectral + Conv) | $(B, 3, 224, 224)$ | $(B, 256)$ | 607,072 |
+| **Geometry Branch** (MLP + Validity Masking) | $(B, 62)$ | $(B, 64)$ | 16,704 |
+| **Learned Gated Fusion Module** | $(B, 1600)$ | $(B, 1600), (B, 3)$ | 205,571 |
+| **Fusion & Classification Head** | $(B, 1600)$ | $(B, 7)$ | 824,327 |
+| **Total Model (A5)** | $(B, 3, 224, 224), (B, 62)$ | $(B, 7)$ | **5,855,706 (~5.86M)** |
+
+---
+
+## 5. Strict Experimental Isolation
 - **Experiment A0**: Spatial-only baseline (`SpatialBaseline`).
 - **Experiment A2**: Spatial + Frequency dual-branch (`SpatialFrequencyModel`).
-- **Experiment A4**: Spatial + Frequency + Geometry plain concatenation (`SpatialFrequencyGeometryModel`).
-- **Gated Fusion**: Strictly isolated to future experiment (A5). Plain concatenation is preserved without gating in A4.
+- **Experiment A4**: Spatial + Frequency + Geometry with plain concatenation (`SpatialFrequencyGeometryModel`).
+- **Experiment A5**: Spatial + Frequency + Geometry with learned gated fusion (`SpatialFrequencyGeometryGatedModel`).
+- **Ablation Integrity**: All prior models (A0, A2, A4) remain untouched and fully reproducible. Temporal smoothing, EMA, Fourier augmentation, and edge filters remain strictly excluded.
