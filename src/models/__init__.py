@@ -11,6 +11,11 @@ from src.models.spatial_frequency import (
     LearnableSpectralFilter,
     FrequencyBranch,
 )
+from src.models.spatial_frequency_geometry import (
+    SpatialFrequencyGeometryModel,
+    create_spatial_frequency_geometry_model,
+    GeometryBranch,
+)
 
 __all__ = [
     "SpatialBaseline",
@@ -20,4 +25,7 @@ __all__ = [
     "create_spatial_frequency_model",
     "LearnableSpectralFilter",
     "FrequencyBranch",
+    "SpatialFrequencyGeometryModel",
+    "create_spatial_frequency_geometry_model",
+    "GeometryBranch",
 ]

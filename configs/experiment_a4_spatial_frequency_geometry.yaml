@@ -1,0 +1,55 @@
+# Experiment A4 Configuration: Spatial + Frequency + Geometry Tri-Branch (Plain Concatenation)
+experiment:
+  name: "a4_spatial_frequency_geometry"
+  seed: 42
+  description: "MobileNetV3-Large spatial backbone + 2D FFT learnable spectral filter + 62-D geometry MLP with plain concatenation (1600-D) fine-tuned on cached RAF-DB."
+
+model:
+  name: "spatial_frequency_geometry"
+  spatial_backbone: "mobilenet_v3_large"
+  pretrained: true
+  num_classes: 7
+  freq_embedding_dim: 256
+  geom_embedding_dim: 64
+  dropout_rate: 0.2
+  input_resolution: [3, 224, 224]
+  geometry_dim: 62
+
+training:
+  epochs: 30
+  batch_size: 32
+  num_workers: 0
+  mixed_precision: true
+  early_stopping:
+    metric: "macro_f1"
+    mode: "max"
+    patience: 7
+    min_delta: 0.001
+
+optimizer:
+  type: "AdamW"
+  backbone_lr: 0.0001    # 1e-4 for pretrained spatial feature extractor
+  freq_lr: 0.001         # 1e-3 for frequency branch trained from scratch
+  geom_lr: 0.001         # 1e-3 for geometry MLP trained from scratch
+  head_lr: 0.001         # 1e-3 for plain concatenation classification head
+  weight_decay: 0.01
+
+scheduler:
+  type: "cosine"
+  t_max: 30
+  eta_min: 0.000001      # 1e-6
+  warmup_epochs: 2
+
+loss:
+  type: "CrossEntropyLoss"
+  label_smoothing: 0.1
+  use_class_weights: true
+  class_weights_mode: "balanced"
+
+data:
+  use_cache: true
+  cache_dir: "data/cache/rafdb_cache"
+  parquet_path: "data/raw/raf-db/train-00000-of-00001.parquet"
+  train_manifest: "data/manifests/rafdb_train.csv"
+  val_manifest: "data/manifests/rafdb_val.csv"
+  test_manifest: "data/manifests/rafdb_test.csv"
