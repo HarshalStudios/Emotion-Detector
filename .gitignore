@@ -32,6 +32,7 @@ models/*.pth
 *.onnx
 *.pt
 *.pth
+!experiments/onnx_a4_recreation/*
 
 # Experiments, cache, and profiler dumps
 .cache/

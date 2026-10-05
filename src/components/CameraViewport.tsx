@@ -65,9 +65,11 @@ export const CameraViewport: React.FC<CameraViewportProps> = ({
     if (prediction.face_detected && prediction.bbox) {
       const [bx, by, bw, bh] = prediction.bbox;
 
-      // Scale to canvas coordinate system (assuming 640x480 standard frame)
-      const scaleX = w / 640;
-      const scaleY = h / 480;
+      // Scale to canvas coordinate system based on active source dimensions
+      const origW = selectedSource === 'sample' ? 512 : (videoRef.current?.videoWidth || 640);
+      const origH = selectedSource === 'sample' ? 512 : (videoRef.current?.videoHeight || 480);
+      const scaleX = w / origW;
+      const scaleY = h / origH;
 
       const sx = bx * scaleX;
       const sy = by * scaleY;
@@ -264,6 +266,7 @@ export const CameraViewport: React.FC<CameraViewportProps> = ({
           <img
             src="/test_face.jpg"
             alt="Calibration Face Reference"
+            crossOrigin="anonymous"
             className="w-full h-full object-cover"
           />
         )}

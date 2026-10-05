@@ -165,12 +165,16 @@ export const AnalyzePage: React.FC<AnalyzePageProps> = ({ onRecordHistory }) => 
 
   // 3. Switch between Webcam and Reference Sample Photo
   const handleSelectSource = (source: 'webcam' | 'sample') => {
-    if (source === selectedSource) return;
+    if (source === selectedSource && cameraStatus === 'live') return;
     if (cameraStatus === 'live') {
       handleStopCamera();
     }
     setSelectedSource(source);
     setErrorInfo(null);
+    if (source === 'sample') {
+      setCameraStatus('live');
+      setIsAnalyzing(true);
+    }
   };
 
   // 4. Teardown only on true unmount
@@ -208,13 +212,50 @@ export const AnalyzePage: React.FC<AnalyzePageProps> = ({ onRecordHistory }) => 
         return; // Skip if previous request is still in-flight
       }
 
+      if (selectedSource === 'sample') {
+        isRequestRunningRef.current = true;
+        const startTime = performance.now();
+        try {
+          const resp = await fetch('/test_face.jpg');
+          const blob = await resp.blob();
+          const res = await apiService.predictImage(blob);
+          const duration = performance.now() - startTime;
+
+          setLatencyMs(duration);
+          setBackendConnected(res.backend_connected !== false);
+          setPrediction(res);
+          setFramesProcessed((prev) => prev + 1);
+
+          if (res.face_detected) {
+            onRecordHistory({
+              timestamp: new Date().toLocaleTimeString(),
+              prediction: res.prediction,
+              confidence: res.confidence,
+              latencyMs: duration,
+              geometryValid: res.geometry_valid,
+            });
+          }
+
+          loopFrameCounterRef.current++;
+          const now = performance.now();
+          const elapsed = (now - lastLoopTimeRef.current) / 1000;
+          if (elapsed >= 1.0) {
+            setFps(loopFrameCounterRef.current / elapsed);
+            loopFrameCounterRef.current = 0;
+            lastLoopTimeRef.current = now;
+          }
+        } catch (err) {
+          console.warn('Sample inference error:', err);
+        } finally {
+          isRequestRunningRef.current = false;
+        }
+        return;
+      }
+
       const canvas = offscreenCanvasRef.current;
       const video = videoRef.current;
-      const sampleImg = document.querySelector('img[src="/test_face.jpg"]') as HTMLImageElement | null;
-      const mediaElement = selectedSource === 'webcam' ? video : sampleImg;
 
-      if (!canvas || !mediaElement) return;
-      if (selectedSource === 'webcam' && (video?.readyState || 0) < 2) return;
+      if (!canvas || !video || (video.readyState || 0) < 2) return;
 
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
@@ -223,7 +264,7 @@ export const AnalyzePage: React.FC<AnalyzePageProps> = ({ onRecordHistory }) => 
       const startTime = performance.now();
 
       try {
-        ctx.drawImage(mediaElement, 0, 0, canvas.width, canvas.height);
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
         canvas.toBlob(
           async (blob) => {
