@@ -32,6 +32,13 @@ models/*.pth
 *.onnx
 *.pt
 *.pth
+
+# Allow the trained A4 seed42 checkpoint
+!model_artifacts/
+!model_artifacts/a4_seed42/
+!model_artifacts/a4_seed42/a4_best_model.pt
+
+# Existing ONNX experiment artifacts
 !experiments/onnx_a4_recreation/*
 
 # Experiments, cache, and profiler dumps
