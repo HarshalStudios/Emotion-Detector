@@ -97,24 +97,26 @@ export class ApiService {
   }
 
   /**
-   * Verified base URL: relative root resolving to window.location.origin
+   * Verified base URL: environment variable VITE_API_URL or relative proxy fallback
    */
   public getBaseUrl(): string {
-    if (typeof window !== 'undefined') {
-      return window.location.origin;
+    const envApiUrl = import.meta.env.VITE_API_URL;
+    if (envApiUrl && typeof envApiUrl === 'string' && envApiUrl.trim() !== '') {
+      return envApiUrl.trim().replace(/\/+$/, '');
     }
-    return 'http://localhost:3000';
+    return '';
   }
 
   /**
    * Real GET /health connectivity verification
    */
   public async checkHealth(): Promise<HealthCheckResult> {
-    const targetUrl = `${this.getBaseUrl()}/health`;
+    const baseUrl = this.getBaseUrl();
+    const targetUrl = baseUrl ? `${baseUrl}/health` : '/health';
     console.log(`[FastAPI Health] Requesting: GET ${targetUrl}`);
 
     try {
-      const response = await fetch('/health', {
+      const response = await fetch(targetUrl, {
         method: 'GET',
         headers: {
           Accept: 'application/json',
@@ -182,12 +184,13 @@ export class ApiService {
    * Send captured video frame to POST /predict as multipart/form-data
    */
   public async predictImage(imageBlob: Blob): Promise<PredictResponse> {
-    const targetUrl = `${this.getBaseUrl()}/predict`;
+    const baseUrl = this.getBaseUrl();
+    const targetUrl = baseUrl ? `${baseUrl}/predict` : '/predict';
     const formData = new FormData();
     formData.append('file', imageBlob, 'frame.jpg');
 
     try {
-      const response = await fetch('/predict', {
+      const response = await fetch(targetUrl, {
         method: 'POST',
         body: formData,
       });

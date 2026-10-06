@@ -59,7 +59,9 @@ IMAGENET_STD = np.array([0.229, 0.224, 0.225], dtype=np.float32).reshape(1, 3, 1
 
 # Robust path resolution independent of current working directory
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DEFAULT_ONNX_PATH = os.path.join(BASE_DIR, "models", "a4_spatial_frequency_geometry.onnx")
+TRAINED_ONNX_PATH = os.path.join(BASE_DIR, "experiments", "onnx_a4_trained", "a4_seed42_trained.onnx")
+MODELS_ONNX_PATH = os.path.join(BASE_DIR, "models", "a4_spatial_frequency_geometry.onnx")
+DEFAULT_ONNX_PATH = TRAINED_ONNX_PATH if os.path.exists(TRAINED_ONNX_PATH) else MODELS_ONNX_PATH
 DEFAULT_LANDMARKER_PATH = os.path.join(BASE_DIR, "models", "mediapipe", "face_landmarker.task")
 
 ONNX_MODEL_PATH = os.environ.get("A4_ONNX_PATH", DEFAULT_ONNX_PATH)

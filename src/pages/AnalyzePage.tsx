@@ -4,7 +4,7 @@ import { PredictionPanel } from '../components/PredictionPanel';
 import { TelemetryPanel } from '../components/TelemetryPanel';
 import { RepresentationWorkspace } from '../components/RepresentationWorkspace';
 import { FullscreenMultiviewModal } from '../components/FullscreenMultiviewModal';
-import { SampleGallery } from '../components/SampleGallery';
+import { SampleGallery, EvaluatedSampleRecord } from '../components/SampleGallery';
 import { SAMPLE_IMAGES, SampleImageItem } from '../data/sampleImages';
 import { apiService, PredictResponse } from '../services/api';
 import { Play, Square, Maximize2, Activity, ImageIcon, Video } from 'lucide-react';
@@ -37,6 +37,11 @@ export const AnalyzePage: React.FC<AnalyzePageProps> = ({ onRecordHistory }) => 
 
   // Authoritative Prediction State
   const [prediction, setPrediction] = useState<PredictResponse | null>(null);
+
+  // Evaluated Samples Dynamic Record
+  const [evaluatedSamples, setEvaluatedSamples] = useState<Record<string, EvaluatedSampleRecord>>({});
+  const [isBatchEvaluating, setIsBatchEvaluating] = useState<boolean>(false);
+  const [batchProgress, setBatchProgress] = useState<{ current: number; total: number } | null>(null);
 
   // DOM Refs
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -79,6 +84,18 @@ export const AnalyzePage: React.FC<AnalyzePageProps> = ({ onRecordHistory }) => 
 
       if (isOnline) {
         setFramesProcessed((prev) => prev + 1);
+
+        // Record real prediction in evaluatedSamples dynamic benchmark record
+        setEvaluatedSamples((prev) => ({
+          ...prev,
+          [sample.id]: {
+            expected: sample.expectedEmotion,
+            predicted: res.prediction,
+            confidence: res.confidence,
+            match: res.prediction.toLowerCase() === sample.expectedEmotion.toLowerCase(),
+          },
+        }));
+
         if (res.face_detected) {
           onRecordHistory({
             timestamp: new Date().toLocaleTimeString(),
@@ -95,6 +112,42 @@ export const AnalyzePage: React.FC<AnalyzePageProps> = ({ onRecordHistory }) => 
       setIsEvaluatingSample(false);
     }
   }, [onRecordHistory]);
+
+  // Batch benchmark all 20 reference samples sequentially through real backend
+  const handleRunAllBenchmarks = useCallback(async () => {
+    if (isBatchEvaluating) return;
+    setIsBatchEvaluating(true);
+
+    for (let i = 0; i < SAMPLE_IMAGES.length; i++) {
+      const s = SAMPLE_IMAGES[i];
+      setBatchProgress({ current: i + 1, total: SAMPLE_IMAGES.length });
+
+      try {
+        const resp = await fetch(s.image);
+        if (resp.ok) {
+          const blob = await resp.blob();
+          const res = await apiService.predictImage(blob);
+          const isOnline = res.backend_connected !== false && res.status !== 'UNAVAILABLE' && res.prediction !== 'UNAVAILABLE';
+          if (isOnline) {
+            setEvaluatedSamples((prev) => ({
+              ...prev,
+              [s.id]: {
+                expected: s.expectedEmotion,
+                predicted: res.prediction,
+                confidence: res.confidence,
+                match: res.prediction.toLowerCase() === s.expectedEmotion.toLowerCase(),
+              },
+            }));
+          }
+        }
+      } catch (err) {
+        console.warn(`Benchmark failed for ${s.id}:`, err);
+      }
+    }
+
+    setIsBatchEvaluating(false);
+    setBatchProgress(null);
+  }, [isBatchEvaluating]);
 
   // 2. Select Sample from Gallery
   const handleSelectSample = useCallback((sample: SampleImageItem) => {
@@ -430,6 +483,9 @@ export const AnalyzePage: React.FC<AnalyzePageProps> = ({ onRecordHistory }) => 
           <PredictionPanel
             prediction={prediction}
             cameraActive={cameraStatus === 'live'}
+            mode={selectedSource}
+            referenceEmotion={selectedSource === 'sample' ? selectedSample.expectedEmotion : null}
+            isEvaluating={isEvaluatingSample}
           />
 
           {/* Mobile Telemetry placement (collapsible, below prediction so prediction isn't buried) */}
@@ -451,6 +507,10 @@ export const AnalyzePage: React.FC<AnalyzePageProps> = ({ onRecordHistory }) => 
           onSelectSample={handleSelectSample}
           prediction={prediction}
           isEvaluating={isEvaluatingSample}
+          evaluatedSamples={evaluatedSamples}
+          onRunAllBenchmarks={handleRunAllBenchmarks}
+          isBatchEvaluating={isBatchEvaluating}
+          batchProgress={batchProgress}
         />
       </section>
 
