@@ -30,6 +30,8 @@ interface CameraViewportProps {
   onOpenFullscreen: () => void;
   selectedSource: 'webcam' | 'sample';
   onSelectSource: (source: 'webcam' | 'sample') => void;
+  activeSampleImage?: string;
+  activeSampleTitle?: string;
 }
 
 export const CameraViewport: React.FC<CameraViewportProps> = ({
@@ -44,6 +46,8 @@ export const CameraViewport: React.FC<CameraViewportProps> = ({
   onOpenFullscreen,
   selectedSource,
   onSelectSource,
+  activeSampleImage = '/samples/neutral/neutral_01.jpg',
+  activeSampleTitle = 'Sample Portrait',
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -78,7 +82,7 @@ export const CameraViewport: React.FC<CameraViewportProps> = ({
 
       // Clean thin technical bounding box with corner brackets
       ctx.strokeStyle = prediction.partial_face ? '#fbbf24' : '#22d3ee';
-      ctx.lineWidth = 1.5;
+      ctx.lineWidth = 2;
 
       const corner = Math.min(sw, sh) * 0.18;
 
@@ -105,58 +109,56 @@ export const CameraViewport: React.FC<CameraViewportProps> = ({
       // Delicate center reticle
       const cx = sx + sw / 2;
       const cy = sy + sh / 2;
-      ctx.strokeStyle = 'rgba(34, 211, 238, 0.4)';
+      ctx.strokeStyle = 'rgba(34, 211, 238, 0.5)';
       ctx.beginPath();
-      ctx.moveTo(cx - 5, cy);
-      ctx.lineTo(cx + 5, cy);
-      ctx.moveTo(cx, cy - 5);
-      ctx.lineTo(cx, cy + 5);
+      ctx.moveTo(cx - 6, cy);
+      ctx.lineTo(cx + 6, cy);
+      ctx.moveTo(cx, cy - 6);
+      ctx.lineTo(cx, cy + 6);
       ctx.stroke();
 
       // Technical label stamp
-      ctx.fillStyle = 'rgba(2, 6, 23, 0.85)';
-      ctx.fillRect(sx, sy - 17, 100, 15);
+      ctx.fillStyle = 'rgba(2, 6, 23, 0.88)';
+      ctx.fillRect(sx, Math.max(0, sy - 18), 110, 16);
       ctx.fillStyle = '#22d3ee';
       ctx.font = '10px "JetBrains Mono", monospace';
       ctx.fillText(
         `ROI · ${(prediction.detection_confidence * 100).toFixed(0)}%`,
         sx + 4,
-        sy - 5
+        Math.max(12, sy - 5)
       );
     }
-  }, [status, showMeshOverlay, prediction]);
+  }, [status, showMeshOverlay, prediction, selectedSource, videoRef]);
 
   const hasFace = prediction?.face_detected;
   const isPartial = prediction?.partial_face;
   const isGeometryValid = prediction?.geometry_valid;
 
   return (
-    <div className="relative w-full rounded-2xl bg-slate-900/90 border border-slate-800 p-3 sm:p-4 backdrop-blur-xl shadow-2xl flex flex-col">
-      
-      {/* Top Compact Technical HUD */}
-      <div className="flex items-center justify-between pb-2.5 mb-2 border-b border-slate-800/80">
-        
+    <div className="relative w-full rounded-2xl bg-slate-900/90 border border-slate-800 p-3 sm:p-4 backdrop-blur-xl shadow-2xl flex flex-col space-y-2.5">
+      {/* Top HUD Toolbar */}
+      <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-slate-800/80">
         {/* Left: Compact Status Signals */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 sm:gap-2">
           {/* Live Indicator */}
-          <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-slate-950 border border-slate-800 font-mono text-[10px]">
+          <div className="flex items-center gap-1.5 px-2 py-1 rounded bg-slate-950 border border-slate-800 font-mono text-[10px]">
             <span
               className={`w-1.5 h-1.5 rounded-full ${
                 status === 'live' ? 'bg-emerald-400 animate-pulse' : 'bg-slate-600'
               }`}
             />
             <span className={status === 'live' ? 'text-emerald-300 font-semibold' : 'text-slate-500'}>
-              {status === 'live' ? 'LIVE' : 'IDLE'}
+              {status === 'live' ? 'ACTIVE' : 'IDLE'}
             </span>
           </div>
 
           {/* RGB Signal */}
-          <span className="px-2 py-0.5 rounded bg-slate-950 border border-slate-800 font-mono text-[10px] text-cyan-400 font-semibold">
+          <span className="px-2 py-1 rounded bg-slate-950 border border-slate-800 font-mono text-[10px] text-cyan-400 font-semibold">
             RGB
           </span>
 
           {/* Face Signal */}
-          <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-slate-950 border border-slate-800 font-mono text-[10px]">
+          <div className="flex items-center gap-1.5 px-2 py-1 rounded bg-slate-950 border border-slate-800 font-mono text-[10px]">
             <span
               className={`w-1.5 h-1.5 rounded-full ${
                 status !== 'live'
@@ -184,7 +186,7 @@ export const CameraViewport: React.FC<CameraViewportProps> = ({
           </div>
 
           {/* Geometry Signal */}
-          <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-slate-950 border border-slate-800 font-mono text-[10px]">
+          <div className="hidden xs:flex items-center gap-1.5 px-2 py-1 rounded bg-slate-950 border border-slate-800 font-mono text-[10px]">
             <span
               className={`w-1.5 h-1.5 rounded-full ${
                 status === 'live' && isGeometryValid ? 'bg-emerald-400' : 'bg-slate-600'
@@ -195,28 +197,32 @@ export const CameraViewport: React.FC<CameraViewportProps> = ({
                 status === 'live' && isGeometryValid ? 'text-emerald-300' : 'text-slate-500'
               }
             >
-              GEOMETRY
+              GEOM
             </span>
           </div>
         </div>
 
-        {/* Right: Viewport Controls */}
-        <div className="flex items-center gap-2">
+        {/* Right: Viewport Controls with Touch-Friendly Hitboxes (min-h-[38px]) */}
+        <div className="flex items-center gap-1.5 sm:gap-2">
           {/* Source switch: Webcam vs Sample Image */}
           <button
             onClick={() => onSelectSource(selectedSource === 'webcam' ? 'sample' : 'webcam')}
-            className="px-2 py-1 rounded bg-slate-950 border border-slate-800 hover:border-slate-700 text-[11px] font-mono text-slate-300 hover:text-white transition-colors flex items-center gap-1.5"
-            title="Toggle between live optical webcam and reference test image"
+            className={`min-h-[38px] px-2.5 py-1.5 rounded-lg border text-xs font-mono transition-colors flex items-center gap-1.5 active:scale-95 focus-visible:outline-2 focus-visible:outline-cyan-400 ${
+              selectedSource === 'webcam'
+                ? 'bg-slate-950 border-cyan-500/40 text-cyan-300 hover:border-cyan-400'
+                : 'bg-amber-950/40 border-amber-500/40 text-amber-300 hover:border-amber-400'
+            }`}
+            title="Toggle between live optical webcam and reference test samples"
           >
             {selectedSource === 'webcam' ? (
               <>
-                <Video className="w-3 h-3 text-cyan-400" />
-                <span className="hidden sm:inline">Webcam</span>
+                <Video className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                <span className="font-semibold">Webcam</span>
               </>
             ) : (
               <>
-                <ImageIcon className="w-3 h-3 text-amber-400" />
-                <span className="hidden sm:inline">Sample Photo</span>
+                <ImageIcon className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                <span className="font-semibold">Sample Mode</span>
               </>
             )}
           </button>
@@ -224,7 +230,7 @@ export const CameraViewport: React.FC<CameraViewportProps> = ({
           {/* Toggle BBox Mesh Overlay */}
           <button
             onClick={onToggleMeshOverlay}
-            className={`p-1.5 rounded border text-xs font-mono transition-colors ${
+            className={`min-h-[38px] min-w-[38px] p-2 rounded-lg border text-xs font-mono transition-colors flex items-center justify-center active:scale-95 focus-visible:outline-2 focus-visible:outline-cyan-400 ${
               showMeshOverlay
                 ? 'bg-cyan-950/60 border-cyan-500/50 text-cyan-300'
                 : 'bg-slate-950 border-slate-800 text-slate-500 hover:text-slate-300'
@@ -232,25 +238,23 @@ export const CameraViewport: React.FC<CameraViewportProps> = ({
             title="Toggle Visual Bounding Box"
             aria-label="Toggle Bounding Box"
           >
-            {showMeshOverlay ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+            {showMeshOverlay ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
           </button>
 
           {/* Fullscreen Modal Trigger */}
           <button
             onClick={onOpenFullscreen}
-            className="p-1.5 rounded bg-slate-950 border border-slate-800 text-slate-400 hover:text-white transition-colors"
-            title="Open Fullscreen Workstation"
+            className="min-h-[38px] min-w-[38px] p-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-400 hover:text-white transition-colors flex items-center justify-center active:scale-95 focus-visible:outline-2 focus-visible:outline-cyan-400"
+            title="Open Fullscreen Viewport"
             aria-label="Open Fullscreen"
           >
-            <Maximize2 className="w-3.5 h-3.5" />
+            <Maximize2 className="w-4 h-4" />
           </button>
         </div>
-
       </div>
 
-      {/* Main 16:9 Video Canvas Viewport */}
-      <div className="relative w-full aspect-video rounded-xl bg-slate-950 border border-slate-800 overflow-hidden flex items-center justify-center">
-        
+      {/* Main Video/Image Canvas Viewport with fluid aspect ratio */}
+      <div className="relative w-full aspect-[4/3] sm:aspect-video rounded-xl bg-slate-950 border border-slate-800 overflow-hidden flex items-center justify-center">
         {/* Live Video Element */}
         {selectedSource === 'webcam' ? (
           <video
@@ -263,12 +267,19 @@ export const CameraViewport: React.FC<CameraViewportProps> = ({
             }`}
           />
         ) : (
-          <img
-            src="/test_face.jpg"
-            alt="Calibration Face Reference"
-            crossOrigin="anonymous"
-            className="w-full h-full object-cover"
-          />
+          <div className="relative w-full h-full flex items-center justify-center bg-slate-950">
+            <img
+              src={activeSampleImage}
+              alt={activeSampleTitle}
+              crossOrigin="anonymous"
+              className="w-full h-full object-contain sm:object-cover transition-opacity duration-200"
+            />
+            {/* Active Sample Indicator Watermark */}
+            <div className="absolute top-3 left-3 bg-slate-950/85 backdrop-blur-md px-2.5 py-1 rounded-md border border-slate-800 font-mono text-[10px] text-amber-300 flex items-center gap-1.5 shadow-md pointer-events-none">
+              <ImageIcon className="w-3 h-3 text-amber-400" />
+              <span>TEST SAMPLE: {activeSampleTitle}</span>
+            </div>
+          </div>
         )}
 
         {/* BBox Overlay Canvas */}
@@ -280,24 +291,33 @@ export const CameraViewport: React.FC<CameraViewportProps> = ({
         />
 
         {/* Idle State Overlay */}
-        {status === 'idle' && (
-          <div className="absolute inset-0 bg-slate-950/90 flex flex-col items-center justify-center p-6 text-center space-y-3.5">
+        {status === 'idle' && selectedSource === 'webcam' && (
+          <div className="absolute inset-0 bg-slate-950/90 flex flex-col items-center justify-center p-4 sm:p-6 text-center space-y-3">
             <div className="w-12 h-12 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-400 shadow-inner">
               <Camera className="w-6 h-6 text-cyan-400" />
             </div>
             <div className="max-w-xs space-y-1">
-              <h3 className="font-semibold text-slate-100 text-sm tracking-tight">Camera Input Ready</h3>
+              <h3 className="font-semibold text-slate-100 text-sm tracking-tight">Camera Feed Inactive</h3>
               <p className="text-xs text-slate-400 leading-relaxed font-sans">
-                Enable camera to stream live RGB frames directly to the A4 emotion analysis model.
+                Enable webcam to stream live RGB frames, or switch to the sample gallery to test photos.
               </p>
             </div>
-            <button
-              onClick={onStartCamera}
-              className="px-5 py-2.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-bold tracking-wide transition-all shadow-[0_0_15px_-3px_rgba(6,182,212,0.4)] active:scale-95 flex items-center gap-2"
-            >
-              <Camera className="w-4 h-4" />
-              <span>ENABLE CAMERA</span>
-            </button>
+            <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+              <button
+                onClick={onStartCamera}
+                className="min-h-[44px] px-5 py-2.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-bold tracking-wide transition-all shadow-[0_0_15px_-3px_rgba(6,182,212,0.4)] active:scale-95 flex items-center gap-2 focus-visible:outline-2 focus-visible:outline-cyan-400"
+              >
+                <Camera className="w-4 h-4" />
+                <span>START CAMERA</span>
+              </button>
+              <button
+                onClick={() => onSelectSource('sample')}
+                className="min-h-[44px] px-4 py-2.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 text-xs font-semibold tracking-wide transition-colors active:scale-95 flex items-center gap-1.5 focus-visible:outline-2 focus-visible:outline-cyan-400"
+              >
+                <ImageIcon className="w-4 h-4 text-amber-400" />
+                <span>SAMPLE PHOTOS</span>
+              </button>
+            </div>
           </div>
         )}
 
@@ -314,26 +334,27 @@ export const CameraViewport: React.FC<CameraViewportProps> = ({
           </div>
         )}
 
-        {/* Specific Diagnostic Error State Overlays */}
+        {/* Diagnostic Error State Overlays with Clear Fallback Workflow */}
         {status === 'error' && errorInfo && (
-          <div className="absolute inset-0 bg-slate-950/95 flex flex-col items-center justify-center p-6 text-center space-y-3">
+          <div className="absolute inset-0 bg-slate-950/95 flex flex-col items-center justify-center p-4 sm:p-6 text-center space-y-3">
             <AlertCircle className="w-8 h-8 text-rose-400" />
             <div className="space-y-1 max-w-sm">
               <h3 className="font-semibold text-rose-200 text-sm">{errorInfo.title}</h3>
               <p className="text-xs text-slate-400 leading-relaxed font-sans">{errorInfo.message}</p>
             </div>
-            <div className="flex gap-2 pt-1">
+            <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
               <button
                 onClick={onStartCamera}
-                className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-white font-mono"
+                className="min-h-[44px] px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-white font-mono active:scale-95"
               >
                 TRY AGAIN
               </button>
               <button
                 onClick={() => onSelectSource('sample')}
-                className="px-4 py-2 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-bold font-mono"
+                className="min-h-[44px] px-4 py-2 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-bold font-mono active:scale-95 flex items-center gap-1.5"
               >
-                USE TEST PHOTO
+                <ImageIcon className="w-3.5 h-3.5" />
+                <span>USE SAMPLE PHOTOS</span>
               </button>
             </div>
           </div>
@@ -341,32 +362,33 @@ export const CameraViewport: React.FC<CameraViewportProps> = ({
 
         {/* Live Status Tag on Bottom Left */}
         {status === 'live' && (
-          <div className="absolute bottom-3 left-3 flex items-center gap-2 pointer-events-none">
+          <div className="absolute bottom-2.5 left-2.5 flex items-center gap-2 pointer-events-none">
             {!hasFace ? (
-              <span className="px-2 py-0.5 rounded bg-slate-950/80 border border-slate-800 font-mono text-[10px] text-slate-400 font-semibold tracking-wider">
+              <span className="px-2 py-0.5 rounded bg-slate-950/85 border border-slate-800 font-mono text-[10px] text-slate-400 font-semibold tracking-wider">
                 NO FACE DETECTED
               </span>
             ) : isPartial ? (
-              <span className="px-2 py-0.5 rounded bg-amber-950/80 border border-amber-600/60 font-mono text-[10px] text-amber-300 font-semibold tracking-wider">
+              <span className="px-2 py-0.5 rounded bg-amber-950/85 border border-amber-600/60 font-mono text-[10px] text-amber-300 font-semibold tracking-wider">
                 PARTIAL FACE DETECTED
               </span>
             ) : (
-              <span className="px-2 py-0.5 rounded bg-emerald-950/80 border border-emerald-600/60 font-mono text-[10px] text-emerald-300 font-semibold tracking-wider flex items-center gap-1">
+              <span className="px-2 py-0.5 rounded bg-emerald-950/85 border border-emerald-600/60 font-mono text-[10px] text-emerald-300 font-semibold tracking-wider flex items-center gap-1">
                 <CheckCircle2 className="w-3 h-3 text-emerald-400" />
                 FACE DETECTED
               </span>
             )}
           </div>
         )}
-
       </div>
 
-      {/* Viewport Privacy Notice */}
-      <div className="flex items-center gap-2 pt-2.5 text-[11px] text-slate-400">
-        <ShieldCheck className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
-        <span>Camera frames are sent to the local analysis backend for facial-expression inference. No identity is stored.</span>
+      {/* Viewport Privacy & Model Info Notice */}
+      <div className="flex items-center justify-between text-[11px] text-slate-400 pt-1">
+        <div className="flex items-center gap-1.5">
+          <ShieldCheck className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+          <span className="truncate">Frames analyzed in real-time by the A4 model pipeline. No facial identity stored.</span>
+        </div>
+        <span className="font-mono text-[10px] text-slate-500 hidden sm:inline">640×480 RGB</span>
       </div>
-
     </div>
   );
 };

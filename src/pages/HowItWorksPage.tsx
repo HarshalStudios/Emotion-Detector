@@ -49,16 +49,16 @@ export const HowItWorksPage: React.FC = () => {
   ];
 
   return (
-    <div className="space-y-10 py-4 max-w-5xl mx-auto">
+    <div className="space-y-6 sm:space-y-10 py-4 max-w-5xl mx-auto w-full">
       {/* Header */}
-      <div className="space-y-3">
-        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-950/80 border border-cyan-500/40 text-cyan-300 text-xs font-mono font-medium">
+      <div className="space-y-2.5">
+        <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded bg-cyan-950/80 border border-cyan-500/40 text-cyan-300 text-xs font-mono font-medium">
           SYSTEM ARCHITECTURE SPECIFICATION
         </div>
-        <h1 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
+        <h1 className="text-2xl sm:text-4xl font-extrabold text-white tracking-tight">
           How Multi-Representation Expression Analysis Works
         </h1>
-        <p className="text-sm sm:text-base text-slate-300 leading-relaxed font-sans max-w-3xl">
+        <p className="text-xs sm:text-base text-slate-300 leading-relaxed font-sans max-w-3xl">
           Traditional facial expression classifiers rely purely on static RGB pixels, which are highly sensitive to head pose variations, shadows, and identity traits. The A4 architecture combines spatial convolutions with frequency-domain spectral analysis and 62-dimensional geometric blendshapes.
         </p>
       </div>
@@ -67,13 +67,13 @@ export const HowItWorksPage: React.FC = () => {
       <PipelineBar currentStep={6} />
 
       {/* Pipeline Steps Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
         {pipelineStages.map((stage) => {
           const Icon = stage.icon;
           return (
             <div
               key={stage.step}
-              className="p-6 rounded-2xl bg-slate-900/80 border border-slate-800 backdrop-blur-xl flex flex-col justify-between space-y-4 shadow-lg hover:border-slate-700 transition-colors"
+              className="p-5 sm:p-6 rounded-2xl bg-slate-900/80 border border-slate-800 backdrop-blur-xl flex flex-col justify-between space-y-4 shadow-lg hover:border-slate-700 transition-colors"
             >
               <div>
                 <div className="flex items-center justify-between mb-3">
@@ -103,10 +103,10 @@ export const HowItWorksPage: React.FC = () => {
       </div>
 
       {/* Technical Summary Banner */}
-      <div className="p-6 rounded-2xl bg-slate-900/50 border border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4">
+      <div className="p-4 sm:p-6 rounded-2xl bg-slate-900/50 border border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
         <div className="flex items-center gap-3">
           <ShieldCheck className="w-6 h-6 text-emerald-400 shrink-0" />
-          <div className="text-xs text-slate-300">
+          <div className="text-xs text-slate-300 leading-relaxed">
             <strong>Zero Biometric Storage:</strong> Camera frames are converted to temporary normalized tensors in memory during active inference. No biometric face vectors or identifiers are permanently retained.
           </div>
         </div>

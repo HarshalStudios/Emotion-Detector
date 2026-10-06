@@ -8,6 +8,7 @@ interface FullscreenMultiviewModalProps {
   prediction: PredictResponse | null;
   videoRef: React.RefObject<HTMLVideoElement | null>;
   selectedSource: 'webcam' | 'sample';
+  activeSampleImage?: string;
   fps: number;
   latencyMs: number;
 }
@@ -18,6 +19,7 @@ export const FullscreenMultiviewModal: React.FC<FullscreenMultiviewModalProps> =
   prediction,
   videoRef,
   selectedSource,
+  activeSampleImage = '/samples/neutral/neutral_01.jpg',
   fps,
   latencyMs,
 }) => {
@@ -29,13 +31,12 @@ export const FullscreenMultiviewModal: React.FC<FullscreenMultiviewModalProps> =
   const emoji = hasFace ? EXPRESSION_EMOJIS[dominantExpr] || '😐' : '👤';
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/95 backdrop-blur-2xl flex flex-col p-4 sm:p-6 overflow-y-auto animate-in fade-in duration-200">
-      
+    <div className="fixed inset-0 z-50 bg-slate-950/98 backdrop-blur-2xl flex flex-col p-3 sm:p-6 overflow-y-auto animate-in fade-in duration-200 w-full">
       {/* Top Header Bar */}
-      <div className="flex items-center justify-between pb-4 border-b border-slate-800">
-        <div className="flex items-center gap-3">
-          <div className="px-3 py-1 rounded bg-cyan-950/80 border border-cyan-500/40 text-cyan-400 font-mono text-xs font-bold">
-            MULTIVIEW COMMAND CENTER
+      <div className="flex items-center justify-between pb-3 sm:pb-4 border-b border-slate-800">
+        <div className="flex items-center gap-2 sm:gap-3">
+          <div className="px-2.5 py-1 rounded bg-cyan-950/80 border border-cyan-500/40 text-cyan-400 font-mono text-xs font-bold">
+            COMMAND CENTER
           </div>
           <span className="text-xs text-slate-400 font-mono hidden sm:inline">
             A4 REAL-TIME FACIAL ANALYSIS WORKSTATION
@@ -44,18 +45,18 @@ export const FullscreenMultiviewModal: React.FC<FullscreenMultiviewModalProps> =
 
         <button
           onClick={onClose}
-          className="p-2 rounded-lg bg-slate-900 border border-slate-800 text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+          className="min-h-[44px] min-w-[44px] p-2.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-400 hover:text-white hover:bg-slate-800 transition-colors flex items-center justify-center active:scale-95"
+          aria-label="Close Fullscreen Command Center"
         >
           <X className="w-5 h-5" />
         </button>
       </div>
 
       {/* Main Grid Viewport */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 my-auto py-6">
-        
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-6 my-auto py-4 sm:py-6">
         {/* Left Column: Large Live Camera Feed (7 Cols) */}
         <div className="lg:col-span-7 flex flex-col gap-3">
-          <div className="relative aspect-video rounded-2xl bg-black border border-slate-800 overflow-hidden shadow-2xl flex items-center justify-center">
+          <div className="relative aspect-[4/3] sm:aspect-video rounded-2xl bg-black border border-slate-800 overflow-hidden shadow-2xl flex items-center justify-center">
             {selectedSource === 'webcam' && videoRef.current ? (
               <video
                 src=""
@@ -72,33 +73,33 @@ export const FullscreenMultiviewModal: React.FC<FullscreenMultiviewModalProps> =
               />
             ) : (
               <img
-                src="/test_face.jpg"
-                alt="Calibration"
-                className="w-full h-full object-cover"
+                src={activeSampleImage}
+                alt="Active Sample Evaluation"
+                className="w-full h-full object-contain sm:object-cover"
               />
             )}
 
             {/* Camera Overlay HUD */}
             <div className="absolute top-3 left-3 right-3 flex justify-between text-xs font-mono text-cyan-300 pointer-events-none">
-              <span className="px-2 py-1 rounded bg-black/60 border border-slate-800">
-                CAM · 640×480 · RAW RGB
+              <span className="px-2 py-1 rounded bg-black/75 border border-slate-800">
+                {selectedSource === 'webcam' ? 'CAM · 640×480 · RAW RGB' : 'BENCHMARK SAMPLE'}
               </span>
-              <span className="px-2 py-1 rounded bg-black/60 border border-slate-800 text-emerald-400">
-                STREAM ONLINE
+              <span className="px-2 py-1 rounded bg-black/75 border border-slate-800 text-emerald-400">
+                ACTIVE
               </span>
             </div>
 
             {/* Bounding box indicator */}
-            {hasFace && (
-              <div className="absolute inset-x-0 bottom-3 flex justify-center">
-                <span className="px-3 py-1 rounded-full bg-slate-950/80 border border-cyan-500/40 text-cyan-300 font-mono text-xs">
+            {hasFace && prediction?.bbox && (
+              <div className="absolute inset-x-0 bottom-3 flex justify-center pointer-events-none">
+                <span className="px-3 py-1 rounded-full bg-slate-950/85 border border-cyan-500/40 text-cyan-300 font-mono text-xs">
                   FACE ROI: [{prediction.bbox.join(', ')}]
                 </span>
               </div>
             )}
           </div>
 
-          <div className="flex items-center justify-between text-xs font-mono text-slate-400 px-2">
+          <div className="flex flex-wrap items-center justify-between text-xs font-mono text-slate-400 px-1 gap-2">
             <span>MODEL: A4 MULTI-REPRESENTATION FUSION</span>
             <span>FPS: {fps.toFixed(1)} · LATENCY: {latencyMs.toFixed(1)} MS</span>
           </div>
@@ -106,15 +107,14 @@ export const FullscreenMultiviewModal: React.FC<FullscreenMultiviewModalProps> =
 
         {/* Right Column: Prominent Expression, Probabilities & Telemetry (5 Cols) */}
         <div className="lg:col-span-5 flex flex-col gap-4">
-          
           {/* Dominant Prediction Focal Card */}
-          <div className="p-6 rounded-2xl bg-slate-900/80 border border-slate-800 shadow-xl relative overflow-hidden">
+          <div className="p-4 sm:p-6 rounded-2xl bg-slate-900/80 border border-slate-800 shadow-xl relative overflow-hidden">
             <span className="font-mono text-xs text-cyan-400 font-semibold tracking-wider uppercase block mb-1">
               DOMINANT PREDICTION
             </span>
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2">
               <div>
-                <h2 className="text-4xl font-extrabold text-white tracking-tight flex items-center gap-3">
+                <h2 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight flex items-center gap-2.5">
                   <span>{dominantExpr.toUpperCase()}</span>
                   <span>{emoji}</span>
                 </h2>
@@ -122,8 +122,8 @@ export const FullscreenMultiviewModal: React.FC<FullscreenMultiviewModalProps> =
                   RAF-DB 7-CLASS CLASSIFIER
                 </p>
               </div>
-              <div className="text-right">
-                <span className="font-mono text-4xl font-bold text-cyan-400">
+              <div className="text-right shrink-0">
+                <span className="font-mono text-3xl sm:text-4xl font-bold text-cyan-400">
                   {dominantConf}%
                 </span>
               </div>
@@ -131,16 +131,16 @@ export const FullscreenMultiviewModal: React.FC<FullscreenMultiviewModalProps> =
           </div>
 
           {/* 7-Class Probabilities */}
-          <div className="p-5 rounded-2xl bg-slate-900/80 border border-slate-800 shadow-xl space-y-2">
+          <div className="p-4 sm:p-5 rounded-2xl bg-slate-900/80 border border-slate-800 shadow-xl space-y-2">
             <span className="font-mono text-xs text-cyan-400 font-semibold tracking-wider uppercase block pb-1 border-b border-slate-800">
               CLASS PROBABILITIES
             </span>
 
             <div className="space-y-2">
               {CANONICAL_EXPRESSIONS.map((expr) => {
-                const prob = hasFace && prediction.probabilities ? (prediction.probabilities[expr] || 0) : 0;
+                const prob = hasFace && prediction?.probabilities ? (prediction.probabilities[expr] || 0) : 0;
                 const percent = (prob * 100).toFixed(1);
-                const isDominant = hasFace && prediction.prediction === expr;
+                const isDominant = hasFace && prediction?.prediction === expr;
 
                 return (
                   <div key={expr} className="space-y-1">
@@ -184,22 +184,19 @@ export const FullscreenMultiviewModal: React.FC<FullscreenMultiviewModalProps> =
               <span className="text-emerald-400">ACTIVE (62-D Blendshapes)</span>
             </div>
           </div>
-
         </div>
-
       </div>
 
       {/* Footer */}
-      <div className="flex justify-between items-center pt-4 border-t border-slate-800 text-xs font-mono text-slate-500">
-        <span>MULTIVIEW COMMAND CENTER // SPECIFICATION A4</span>
+      <div className="flex flex-col sm:flex-row justify-between items-center gap-3 pt-3 sm:pt-4 border-t border-slate-800 text-xs font-mono text-slate-500">
+        <span>MULTIVIEW COMMAND CENTER · SPECIFICATION A4</span>
         <button
           onClick={onClose}
-          className="px-4 py-1.5 rounded-lg bg-cyan-500 text-slate-950 font-bold hover:bg-cyan-400 transition-colors"
+          className="w-full sm:w-auto min-h-[44px] px-5 py-2 rounded-lg bg-cyan-500 text-slate-950 font-bold hover:bg-cyan-400 transition-colors active:scale-95"
         >
-          DISMISS MULTIVIEW
+          DISMISS COMMAND CENTER
         </button>
       </div>
-
     </div>
   );
 };
