@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
+    "backend": "python3 -m uvicorn backend.main:app --host 127.0.0.1 --port 8001",
     "build": "vite build",
     "start": "node server.ts",
     "preview": "vite preview",

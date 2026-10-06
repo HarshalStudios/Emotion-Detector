@@ -2,7 +2,7 @@ import express, { Request, Response } from 'express';
 import path from 'path';
 import dotenv from 'dotenv';
 import multer from 'multer';
-import { GoogleGenAI } from '@google/genai';
+import { spawn, ChildProcess } from 'child_process';
 
 dotenv.config();
 
@@ -10,7 +10,10 @@ const app = express();
 const PORT = 3000;
 const isProd = process.env.NODE_ENV === 'production';
 
-// Multipart upload handler for webcam / sample frames
+// Target URL for the authoritative FastAPI ML backend
+const FASTAPI_URL = process.env.FASTAPI_URL || 'http://127.0.0.1:8001';
+
+// Multipart upload handler for webcam / sample frames to forward as proxy
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
@@ -18,42 +21,56 @@ const upload = multer({
   },
 });
 
-const CANONICAL_CLASSES = [
-  'Neutral',
-  'Happy',
-  'Sad',
-  'Surprise',
-  'Fear',
-  'Disgust',
-  'Angry',
-] as const;
+let fastapiProcess: ChildProcess | null = null;
 
-type ExpressionClass = (typeof CANONICAL_CLASSES)[number];
-
-// Optional Gemini client for deep multimodal inspection
-const geminiApiKey = process.env.GEMINI_API_KEY;
-let aiClient: GoogleGenAI | null = null;
-if (geminiApiKey) {
+// Ensure FastAPI is running on 127.0.0.1:8001
+async function ensureFastapiBackend() {
   try {
-    aiClient = new GoogleGenAI();
-  } catch (err) {
-    console.warn('[Server] Could not initialize GoogleGenAI:', err);
+    const res = await fetch(`${FASTAPI_URL}/health`, { signal: AbortSignal.timeout(1000) });
+    if (res.ok) {
+      console.log(`[FastAPI Proxy] Detected active FastAPI backend at ${FASTAPI_URL}`);
+      return;
+    }
+  } catch {
+    // Backend not running yet, spawn it
   }
+
+  console.log(`[FastAPI Proxy] Starting local FastAPI backend on ${FASTAPI_URL}...`);
+  fastapiProcess = spawn('python3', ['-m', 'uvicorn', 'backend.main:app', '--host', '127.0.0.1', '--port', '8001'], {
+    stdio: 'inherit',
+    detached: false,
+  });
+
+  fastapiProcess.on('error', (err) => {
+    console.error('[FastAPI Subprocess Error]:', err);
+  });
+
+  fastapiProcess.on('exit', (code, signal) => {
+    console.log(`[FastAPI Subprocess Exit] code: ${code}, signal: ${signal}`);
+  });
+
+  // Poll until ready (max 10s)
+  for (let i = 0; i < 20; i++) {
+    await new Promise((r) => setTimeout(r, 500));
+    try {
+      const res = await fetch(`${FASTAPI_URL}/health`, { signal: AbortSignal.timeout(1000) });
+      if (res.ok) {
+        console.log(`[FastAPI Proxy] FastAPI backend ready at ${FASTAPI_URL}`);
+        return;
+      }
+    } catch {
+      // Retry
+    }
+  }
+  console.warn(`[FastAPI Proxy] Timeout waiting for FastAPI backend at ${FASTAPI_URL}`);
 }
 
-// Upstream ML inference backend URL (FastAPI)
-const FASTAPI_URL = process.env.FASTAPI_URL || 'http://127.0.0.1:8001';
-
-// 1. Authoritative Health Endpoint: Proxies directly to FastAPI /health
+// 1. Authoritative Health Endpoint: Pure reverse proxy to FastAPI /health
 app.get('/health', async (_req: Request, res: Response) => {
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 2000);
-
     const upstream = await fetch(`${FASTAPI_URL}/health`, {
-      signal: controller.signal,
+      signal: AbortSignal.timeout(3000),
     });
-    clearTimeout(timeout);
 
     if (upstream.ok) {
       const data = await upstream.json();
@@ -78,36 +95,35 @@ app.get('/health', async (_req: Request, res: Response) => {
   }
 });
 
-// 2. Service Info Endpoint
+// 2. Service Info Endpoint: Pure reverse proxy to FastAPI /api/info
 app.get('/api/info', async (_req: Request, res: Response) => {
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 2000);
-
     const upstream = await fetch(`${FASTAPI_URL}/api/info`, {
-      signal: controller.signal,
+      signal: AbortSignal.timeout(3000),
     });
-    clearTimeout(timeout);
 
     if (upstream.ok) {
       const data = await upstream.json();
-      return res.json({ ...data, backend_connected: true });
+      return res.json({
+        ...data,
+        backend_connected: true,
+      });
     }
   } catch {
-    // Upstream info unreachable
+    // Upstream unreachable
   }
 
   return res.json({
-    service: 'Emotion Detector (A4 Spatial-Frequency-Geometry)',
+    service: 'Emotion Detector (A4 Spatial-Frequency-Geometry Proxy)',
     status: 'online',
     fastapi_target: FASTAPI_URL,
     architecture: 'MobileNetV3-Large (Spatial) + 2D-FFT (Frequency) + 62-D (Geometry)',
-    classes: CANONICAL_CLASSES,
+    classes: ['Neutral', 'Happy', 'Sad', 'Surprise', 'Fear', 'Disgust', 'Angry'],
+    backend_connected: false,
   });
 });
 
-// 3. Authoritative Predict Endpoint: Pure proxy to FastAPI /predict
-// Strictly passes through real ONNX inference results with ZERO local calculation or logits synthesis.
+// 3. Authoritative Predict Endpoint: Pure zero-computation reverse proxy to FastAPI /predict
 app.post('/predict', upload.single('file') as any, async (req: Request, res: Response) => {
   try {
     const file = req.file;
@@ -125,15 +141,11 @@ app.post('/predict', upload.single('file') as any, async (req: Request, res: Res
     const blob = new Blob([new Uint8Array(file.buffer)], { type: file.mimetype || 'image/jpeg' });
     formData.append('file', blob, file.originalname || 'frame.jpg');
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 6000);
-
     const upstreamResponse = await fetch(`${FASTAPI_URL}/predict`, {
       method: 'POST',
       body: formData,
-      signal: controller.signal,
+      signal: AbortSignal.timeout(10000),
     });
-    clearTimeout(timeout);
 
     if (upstreamResponse.ok) {
       const predictionData = await upstreamResponse.json();
@@ -172,7 +184,6 @@ app.post('/predict', upload.single('file') as any, async (req: Request, res: Res
     const errorMsg = err instanceof Error ? err.message : String(err);
     console.warn(`[Proxy Error] FastAPI backend at ${FASTAPI_URL} unreachable:`, errorMsg);
 
-    // Return honest UNAVAILABLE status. Never generate fake emotions or fallback to Happy/Neutral.
     return res.status(503).json({
       status: 'UNAVAILABLE',
       face_detected: false,
@@ -199,51 +210,25 @@ app.post('/predict', upload.single('file') as any, async (req: Request, res: Res
   }
 });
 
-// 4. Optional Gemini Deep Inspection Endpoint
-app.post('/api/deep-analyze', upload.single('file') as any, async (req: Request, res: Response) => {
-  if (!aiClient || !req.file?.buffer) {
-    return res.status(400).json({
-      error: aiClient ? 'No image buffer provided' : 'GEMINI_API_KEY is not configured on server',
-    });
+// Clean shutdown handler
+function handleShutdown() {
+  if (fastapiProcess) {
+    console.log('[FastAPI Proxy] Stopping FastAPI backend subprocess...');
+    try {
+      fastapiProcess.kill('SIGTERM');
+    } catch {
+      // Ignore
+    }
   }
+  process.exit(0);
+}
 
-  try {
-    const base64Image = req.file.buffer.toString('base64');
-    const mimeType = req.file.mimetype || 'image/jpeg';
-
-    const response = await aiClient.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: [
-        {
-          role: 'user',
-          parts: [
-            {
-              inlineData: {
-                data: base64Image,
-                mimeType,
-              },
-            },
-            {
-              text: 'Analyze the facial expression in this image. Classify into one of: Neutral, Happy, Sad, Surprise, Fear, Disgust, Angry. Return a valid JSON object with keys: prediction, confidence (0 to 1), reasoning (short 1-sentence), actionUnits (list of observed facial movements). Return ONLY JSON.',
-            },
-          ],
-        },
-      ],
-    });
-
-    const text = response.text || '';
-    return res.json({ result: text });
-  } catch (err: unknown) {
-    const errorMsg = err instanceof Error ? err.message : String(err);
-    return res.status(500).json({ error: errorMsg });
-  }
-});
-
-// Body parsers for JSON routes
-app.use(express.json({ limit: '25mb' }));
-app.use(express.urlencoded({ extended: true, limit: '25mb' }));
+process.on('SIGINT', handleShutdown);
+process.on('SIGTERM', handleShutdown);
 
 async function main() {
+  await ensureFastapiBackend();
+
   if (!isProd) {
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
@@ -267,3 +252,4 @@ main().catch((err) => {
   console.error('Failed to start server:', err);
   process.exit(1);
 });
+
