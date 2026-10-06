@@ -72,7 +72,7 @@ export const RepresentationWorkspace: React.FC<RepresentationWorkspaceProps> = (
 
       {/* 2. The Three Authoritative Representation Channels: 3-col on desktop, stacked on mobile */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 sm:gap-4">
-        {/* Branch 01: Spatial (ConvNeXt-Tiny Deep Visual Feature) */}
+        {/* Branch 01: Spatial (Spatial — MobileNetV3-Large Visual Feature) */}
         <div className="p-3.5 sm:p-4 rounded-xl bg-slate-950/80 border border-slate-800 flex flex-col justify-between space-y-3">
           <div>
             <div className="flex items-center justify-between mb-1.5">
@@ -87,9 +87,9 @@ export const RepresentationWorkspace: React.FC<RepresentationWorkspaceProps> = (
                 {hasFace ? 'ACTIVE' : 'STANDBY'}
               </span>
             </div>
-            <h4 className="text-sm font-semibold text-white">Spatial Deep Visual Feature</h4>
+            <h4 className="text-sm font-semibold text-white">Spatial — MobileNetV3-Large</h4>
             <p className="text-xs text-slate-400 leading-relaxed mt-1 font-sans">
-              ConvNeXt-Tiny convolutional hierarchical embeddings extracted from the roll-aligned 224×224 RGB image.
+              MobileNetV3-Large convolutional visual embeddings extracted from the roll-aligned 224×224 RGB image.
             </p>
           </div>
 
@@ -97,7 +97,7 @@ export const RepresentationWorkspace: React.FC<RepresentationWorkspaceProps> = (
           <div className="p-2.5 rounded-lg bg-slate-900/60 border border-slate-800/80 space-y-2">
             <div className="flex justify-between items-center text-[10px] font-mono text-slate-400">
               <span>FEATURE EMBEDDING</span>
-              <span className="text-cyan-300">768-D DENSE</span>
+              <span className="text-cyan-300">960-D DENSE</span>
             </div>
 
             {/* Subtle Abstract Spatial Tensor Grid */}
@@ -119,7 +119,7 @@ export const RepresentationWorkspace: React.FC<RepresentationWorkspaceProps> = (
             </div>
 
             <div className="flex justify-between text-[10px] font-mono text-slate-500">
-              <span>Backbone: ConvNeXt</span>
+              <span>Backbone: MobileNetV3-Large</span>
               <span>Input: 224×224</span>
             </div>
           </div>

@@ -13,7 +13,7 @@ export const ResearchPage: React.FC = () => {
       p50_4th: "13.91 ms",
       fps_4th: "71.9 FPS",
       p95: "34.62 ms",
-      status: "Selected Candidate",
+      status: "Benchmarked",
     },
     {
       name: "EfficientNet-B0",
@@ -37,7 +37,7 @@ export const ResearchPage: React.FC = () => {
       p50_4th: "3.65 ms",
       fps_4th: "274.0 FPS",
       p95: "7.92 ms",
-      status: "Benchmarked",
+      status: "Selected Candidate",
     },
   ];
 
@@ -207,7 +207,7 @@ export const ResearchPage: React.FC = () => {
         </div>
 
         <div className="p-3 rounded-lg bg-cyan-950/20 border border-cyan-900/40 text-xs text-cyan-200">
-          <strong>Decision Threshold:</strong> All candidate backbones comfortably exceed the real-time target of 15 FPS on a single CPU thread (31.4 to 154.3 FPS). ConvNeXt-Tiny was adopted for the spatial branch to provide superior semantic visual representations for candidate A4.
+          <strong>Decision Threshold:</strong> All candidate backbones comfortably exceed the real-time target of 15 FPS on a single CPU thread (31.4 to 154.3 FPS). MobileNetV3-Large was adopted for the spatial branch to provide ultra-low latency (3.65 ms p50 on 4 threads, 274 FPS) and robust visual representations for candidate A4.
         </div>
       </div>
     </div>

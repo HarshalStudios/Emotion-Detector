@@ -55,7 +55,24 @@ export interface PredictResponse {
     roll: number;
   };
   bbox: [number, number, number, number]; // [x, y, w, h]
+  raw_logits?: Record<string, number>;
   backend_connected?: boolean;
+  debug_info?: {
+    blendshape_count: number;
+    ratio_count: number;
+    vector_dim: number;
+    landmark_count: number;
+    filtering: {
+      min_width: number;
+      min_height: number;
+      max_abs_yaw: number;
+      max_abs_pitch: number;
+      max_abs_roll: number;
+      min_detection_confidence: number;
+    };
+    blendshapes?: { name: string; value: number }[];
+    ratios?: { name: string; value: number }[];
+  };
 }
 
 export interface HealthCheckResult {

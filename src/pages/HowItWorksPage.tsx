@@ -28,8 +28,8 @@ export const HowItWorksPage: React.FC = () => {
     {
       step: '04',
       title: 'Tri-Representation Extraction',
-      desc: 'The aligned facial patch is split into three orthogonal representation branches: Spatial (ConvNeXt-Tiny visual tokens), Frequency (2D-FFT spectral magnitude map), and Geometry (62-D blendshape vector).',
-      specs: ['Spatial: ConvNeXt Hierarchical Features', 'Frequency: 2D FFT Magnitude Spectrum', 'Geometry: 52 Blendshapes + 10 Ratios'],
+      desc: 'The aligned facial patch is split into three orthogonal representation branches: Spatial (Spatial — MobileNetV3-Large visual tokens), Frequency (2D-FFT spectral magnitude map), and Geometry (62-D blendshape vector).',
+      specs: ['Spatial: MobileNetV3-Large Visual Features', 'Frequency: 2D FFT Magnitude Spectrum', 'Geometry: 52 Blendshapes + 10 Ratios'],
       icon: Layers,
     },
     {

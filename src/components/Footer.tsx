@@ -56,7 +56,7 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
 
         <div className="pt-3 border-t border-slate-900 flex flex-col md:flex-row items-start md:items-center justify-between gap-2.5 text-[11px] text-slate-400">
           <p className="max-w-2xl leading-relaxed">
-            Candidate A4: Spatial (ConvNeXt-Tiny) + Frequency (2D-FFT) + Geometry (MediaPipe 62-D) Multi-Representation Fusion. Analyzes visible facial Action Unit muscle activations and physical expressions; does not claim to infer internal subjective emotional states.
+            Candidate A4: Spatial — MobileNetV3-Large + Frequency (2D-FFT) + Geometry (MediaPipe 62-D) Multi-Representation Fusion. Analyzes visible facial Action Unit muscle activations and physical expressions; does not claim to infer internal subjective emotional states.
           </p>
           <div className="flex items-center gap-2 font-mono text-[10px] text-slate-400 shrink-0">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />

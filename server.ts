@@ -163,6 +163,7 @@ function analyzeFrame(buffer: Buffer): {
     prediction_index: CANONICAL_CLASSES.indexOf(dominantClass),
     confidence: Math.round(dominantProb * 10000) / 10000,
     probabilities,
+    raw_logits: rawLogits,
     geometry_valid: true,
     detection_confidence: detectionConfidence,
     head_pose: { pitch, yaw, roll },
@@ -189,9 +190,9 @@ app.get('/api/info', (_req: Request, res: Response) => {
     service: 'Emotion Detector Backend',
     status: 'online',
     model: 'A4_spatial_frequency_geometry',
-    architecture: 'ConvNeXt-Tiny (Spatial) + 2D-FFT (Frequency) + 62-D (Geometry)',
+    architecture: 'MobileNetV3-Large (Spatial) + 2D-FFT (Frequency) + 62-D (Geometry)',
     representations: [
-      'Spatial RGB (224x224 ConvNeXt-Tiny)',
+      'Spatial RGB (224x224 MobileNetV3-Large)',
       'Spatial Frequency (FFT Log-Magnitude)',
       '62-D Facial Geometry (52 Blendshapes + 10 Normalized Distance Ratios)',
     ],
@@ -217,6 +218,21 @@ app.post('/predict', upload.single('file') as any, (req: Request, res: Response)
     return res.json({
       status: 'OK',
       ...analysis,
+      raw_logits: analysis.raw_logits,
+      debug_info: {
+        blendshape_count: 52,
+        ratio_count: 10,
+        vector_dim: 62,
+        landmark_count: 468,
+        filtering: {
+          min_width: 64,
+          min_height: 64,
+          max_abs_yaw: 45,
+          max_abs_pitch: 35,
+          max_abs_roll: 45,
+          min_detection_confidence: 0.5,
+        },
+      },
       backend_connected: true,
     });
   } catch (err: unknown) {

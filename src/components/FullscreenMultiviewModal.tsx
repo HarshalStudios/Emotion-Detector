@@ -173,7 +173,7 @@ export const FullscreenMultiviewModal: React.FC<FullscreenMultiviewModalProps> =
             </div>
             <div className="flex justify-between">
               <span className="text-slate-400">Spatial Branch:</span>
-              <span className="text-emerald-400">ACTIVE (ConvNeXt-Tiny)</span>
+              <span className="text-emerald-400">ACTIVE (Spatial — MobileNetV3-Large)</span>
             </div>
             <div className="flex justify-between">
               <span className="text-slate-400">Frequency Branch:</span>

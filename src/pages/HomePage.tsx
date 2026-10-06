@@ -123,7 +123,7 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
             <p className="text-cyan-400 font-semibold">&gt; INITIALIZING EMOTION DETECTOR PIPELINE...</p>
             <p>&gt; face_pipeline: MediaPipe 5-Point Roll Alignment (1.30x Margin)</p>
             <p>&gt; tensor_dimensions: [1, 3, 224, 224] float32 RGB (ImageNet norm)</p>
-            <p>&gt; branch_01_spatial: ConvNeXt-Tiny Deep Visual Embedding</p>
+            <p>&gt; branch_01_spatial: Spatial — MobileNetV3-Large Visual Embedding</p>
             <p>&gt; branch_02_frequency: 2D-FFT Spectral Magnitude Transform</p>
             <p>&gt; branch_03_geometry: MediaPipe 62-D Vector (52 Blendshapes + 10 Ratios)</p>
             <p>&gt; fusion_layer: A4 Concatenated Representation Projection</p>
@@ -159,7 +159,7 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
           <div className="space-y-2 text-xs font-mono">
             <div className="flex items-center justify-between p-2.5 rounded-lg bg-slate-950 border border-slate-800">
               <span className="text-slate-400">Spatial Convolution:</span>
-              <span className="text-white font-semibold">ConvNeXt-Tiny</span>
+              <span className="text-white font-semibold">MobileNetV3-Large</span>
             </div>
             <div className="flex items-center justify-between p-2.5 rounded-lg bg-slate-950 border border-slate-800">
               <span className="text-slate-400">Frequency Transform:</span>
