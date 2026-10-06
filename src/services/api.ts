@@ -205,7 +205,29 @@ export class ApiService {
     } catch (err) {
       this.backendReachable = false;
       console.warn(`[FastAPI Predict] Prediction request failed:`, err);
-      return this.getLocalFallbackResponse();
+      // Return honest UNAVAILABLE response - NEVER return a fake prediction or Happy/Neutral fallback
+      return {
+        status: 'UNAVAILABLE',
+        face_detected: false,
+        partial_face: false,
+        prediction: 'UNAVAILABLE',
+        prediction_index: -1,
+        confidence: 0,
+        probabilities: {
+          Neutral: 0,
+          Happy: 0,
+          Sad: 0,
+          Surprise: 0,
+          Fear: 0,
+          Disgust: 0,
+          Angry: 0,
+        },
+        geometry_valid: false,
+        detection_confidence: 0,
+        head_pose: { pitch: 0, yaw: 0, roll: 0 },
+        bbox: [0, 0, 0, 0],
+        backend_connected: false,
+      };
     }
   }
 
@@ -215,45 +237,6 @@ export class ApiService {
 
   public getLastHealthResult(): HealthCheckResult | null {
     return this.lastHealthResult;
-  }
-
-  /**
-   * Client-side fallback to keep UI functional when detached from backend daemon
-   */
-  private getLocalFallbackResponse(): PredictResponse {
-    const time = Date.now() / 1000;
-    const isHappy = Math.sin(time * 0.5) > 0;
-    const dominant: ExpressionType = isHappy ? 'Happy' : 'Neutral';
-    const conf = 0.824 + Math.sin(time * 1.2) * 0.05;
-
-    const probs: Record<string, number> = {
-      Neutral: isHappy ? 0.12 : 0.78,
-      Happy: isHappy ? 0.82 : 0.09,
-      Sad: 0.02,
-      Surprise: 0.03,
-      Fear: 0.005,
-      Disgust: 0.003,
-      Angry: 0.002,
-    };
-
-    return {
-      status: 'OK',
-      face_detected: true,
-      partial_face: false,
-      prediction: dominant,
-      prediction_index: CANONICAL_EXPRESSIONS.indexOf(dominant),
-      confidence: conf,
-      probabilities: probs,
-      geometry_valid: true,
-      detection_confidence: 0.885,
-      head_pose: {
-        pitch: Math.round((Math.sin(time * 0.7) * 4.2 + 2.1) * 10) / 10,
-        yaw: Math.round((Math.cos(time * 0.5) * 6.5 - 1.2) * 10) / 10,
-        roll: Math.round((Math.sin(time * 0.9) * 1.8) * 10) / 10,
-      },
-      bbox: [180, 80, 280, 350],
-      backend_connected: false,
-    };
   }
 }
 

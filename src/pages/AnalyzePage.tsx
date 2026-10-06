@@ -72,19 +72,22 @@ export const AnalyzePage: React.FC<AnalyzePageProps> = ({ onRecordHistory }) => 
       const res = await apiService.predictImage(blob);
       const duration = performance.now() - startTime;
 
+      const isOnline = res.backend_connected !== false && res.status !== 'UNAVAILABLE' && res.prediction !== 'UNAVAILABLE';
       setLatencyMs(duration);
-      setBackendConnected(res.backend_connected !== false);
+      setBackendConnected(isOnline);
       setPrediction(res);
-      setFramesProcessed((prev) => prev + 1);
 
-      if (res.face_detected) {
-        onRecordHistory({
-          timestamp: new Date().toLocaleTimeString(),
-          prediction: res.prediction,
-          confidence: res.confidence,
-          latencyMs: duration,
-          geometryValid: res.geometry_valid,
-        });
+      if (isOnline) {
+        setFramesProcessed((prev) => prev + 1);
+        if (res.face_detected) {
+          onRecordHistory({
+            timestamp: new Date().toLocaleTimeString(),
+            prediction: res.prediction,
+            confidence: res.confidence,
+            latencyMs: duration,
+            geometryValid: res.geometry_valid,
+          });
+        }
       }
     } catch (err) {
       console.warn('Sample evaluation failed:', err);
@@ -285,19 +288,22 @@ export const AnalyzePage: React.FC<AnalyzePageProps> = ({ onRecordHistory }) => 
               const res = await apiService.predictImage(blob);
               const duration = performance.now() - startTime;
 
+              const isOnline = res.backend_connected !== false && res.status !== 'UNAVAILABLE' && res.prediction !== 'UNAVAILABLE';
               setLatencyMs(duration);
-              setBackendConnected(res.backend_connected !== false);
+              setBackendConnected(isOnline);
               setPrediction(res);
-              setFramesProcessed((prev) => prev + 1);
 
-              if (res.face_detected) {
-                onRecordHistory({
-                  timestamp: new Date().toLocaleTimeString(),
-                  prediction: res.prediction,
-                  confidence: res.confidence,
-                  latencyMs: duration,
-                  geometryValid: res.geometry_valid,
-                });
+              if (isOnline) {
+                setFramesProcessed((prev) => prev + 1);
+                if (res.face_detected) {
+                  onRecordHistory({
+                    timestamp: new Date().toLocaleTimeString(),
+                    prediction: res.prediction,
+                    confidence: res.confidence,
+                    latencyMs: duration,
+                    geometryValid: res.geometry_valid,
+                  });
+                }
               }
 
               loopFrameCounterRef.current++;

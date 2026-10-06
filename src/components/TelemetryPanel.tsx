@@ -123,8 +123,8 @@ export const TelemetryPanel: React.FC<TelemetryPanelProps> = ({
         {/* Engine Status */}
         <div className="p-2.5 rounded-lg bg-slate-950/80 border border-slate-800/80">
           <span className="text-slate-400 text-[10px] block uppercase">BACKEND PIPELINE</span>
-          <span className={backendConnected ? 'text-emerald-400 font-bold' : 'text-amber-400 font-medium'}>
-            {backendConnected ? 'NODE/EXPRESS ●' : 'STANDBY'}
+          <span className={backendConnected ? 'text-emerald-400 font-bold' : 'text-red-400 font-medium'}>
+            {backendConnected ? 'FASTAPI // A4 ONNX' : 'OFFLINE // STANDBY'}
           </span>
         </div>
       </div>

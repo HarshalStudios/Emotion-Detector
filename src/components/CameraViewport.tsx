@@ -51,6 +51,11 @@ export const CameraViewport: React.FC<CameraViewportProps> = ({
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
+  const isBackendDown = prediction ? (prediction.backend_connected === false || prediction.status === 'UNAVAILABLE' || prediction.prediction === 'UNAVAILABLE') : false;
+  const hasFace = !isBackendDown && Boolean(prediction?.face_detected);
+  const isPartial = !isBackendDown && Boolean(prediction?.partial_face);
+  const isGeometryValid = !isBackendDown && Boolean(prediction?.geometry_valid);
+
   // Render authoritative Bounding Box on canvas overlay
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -60,7 +65,7 @@ export const CameraViewport: React.FC<CameraViewportProps> = ({
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    if (status !== 'live' || !showMeshOverlay || !prediction) return;
+    if (status !== 'live' || !showMeshOverlay || !prediction || isBackendDown) return;
 
     const w = canvas.width;
     const h = canvas.height;
@@ -130,10 +135,6 @@ export const CameraViewport: React.FC<CameraViewportProps> = ({
     }
   }, [status, showMeshOverlay, prediction, selectedSource, videoRef]);
 
-  const hasFace = prediction?.face_detected;
-  const isPartial = prediction?.partial_face;
-  const isGeometryValid = prediction?.geometry_valid;
-
   return (
     <div className="relative w-full rounded-2xl bg-slate-900/90 border border-slate-800 p-3 sm:p-4 backdrop-blur-xl shadow-2xl flex flex-col space-y-2.5">
       {/* Top HUD Toolbar */}
@@ -152,10 +153,17 @@ export const CameraViewport: React.FC<CameraViewportProps> = ({
             </span>
           </div>
 
-          {/* RGB Signal */}
-          <span className="px-2 py-1 rounded bg-slate-950 border border-slate-800 font-mono text-[10px] text-cyan-400 font-semibold">
-            RGB
-          </span>
+          {/* Backend Status Signal */}
+          {isBackendDown ? (
+            <span className="px-2 py-1 rounded bg-red-950/80 border border-red-700/60 font-mono text-[10px] text-red-300 font-semibold flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-red-400" />
+              BACKEND OFFLINE
+            </span>
+          ) : (
+            <span className="px-2 py-1 rounded bg-slate-950 border border-slate-800 font-mono text-[10px] text-cyan-400 font-semibold">
+              RGB
+            </span>
+          )}
 
           {/* Face Signal */}
           <div className="flex items-center gap-1.5 px-2 py-1 rounded bg-slate-950 border border-slate-800 font-mono text-[10px]">
