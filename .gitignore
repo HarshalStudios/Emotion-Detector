@@ -26,12 +26,12 @@ datasets/
 
 # Model weights & training checkpoints
 checkpoints/
-models/*.onnx
 models/*.pt
 models/*.pth
-*.onnx
 *.pt
 *.pth
+!models/a4_spatial_frequency_geometry.onnx*
+!models/mediapipe/
 !experiments/onnx_a4_recreation/*
 
 # Experiments, cache, and profiler dumps

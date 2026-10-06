@@ -57,8 +57,13 @@ CANONICAL_CLASSES = [
 IMAGENET_MEAN = np.array([0.485, 0.456, 0.406], dtype=np.float32).reshape(1, 3, 1, 1)
 IMAGENET_STD = np.array([0.229, 0.224, 0.225], dtype=np.float32).reshape(1, 3, 1, 1)
 
-ONNX_MODEL_PATH = os.environ.get("A4_ONNX_PATH", "models/a4_spatial_frequency_geometry.onnx")
-LANDMARKER_MODEL_PATH = os.environ.get("LANDMARKER_PATH", "models/mediapipe/face_landmarker.task")
+# Robust path resolution independent of current working directory
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DEFAULT_ONNX_PATH = os.path.join(BASE_DIR, "models", "a4_spatial_frequency_geometry.onnx")
+DEFAULT_LANDMARKER_PATH = os.path.join(BASE_DIR, "models", "mediapipe", "face_landmarker.task")
+
+ONNX_MODEL_PATH = os.environ.get("A4_ONNX_PATH", DEFAULT_ONNX_PATH)
+LANDMARKER_MODEL_PATH = os.environ.get("LANDMARKER_PATH", DEFAULT_LANDMARKER_PATH)
 
 # Initialize FastAPI App
 if FastAPI is not None:
@@ -68,9 +73,19 @@ if FastAPI is not None:
         version="1.0.0",
     )
 
+    allowed_origins_env = os.environ.get("ALLOWED_ORIGINS", "")
+    custom_origins = [o.strip() for o in allowed_origins_env.split(",") if o.strip()]
+
+    DEFAULT_ORIGINS = [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "https://emotion-detector.pages.dev",
+    ]
+    ALLOWED_ORIGINS = list(set(DEFAULT_ORIGINS + custom_origins))
+
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origins=ALLOWED_ORIGINS,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -214,7 +229,6 @@ def preprocess_face_pipeline(image_bytes: bytes) -> Dict[str, Any]:
                 # Head pose from transformation matrix if available
                 if detection_result.facial_transformation_matrixes and len(detection_result.facial_transformation_matrixes) > 0:
                     mat = np.array(detection_result.facial_transformation_matrixes[0]).flatten()
-                    # Rotation matrix decomposition to Euler angles (degrees)
                     pitch = math.atan2(mat[9], mat[10]) * (180.0 / math.pi)
                     yaw = math.atan2(-mat[8], math.sqrt(mat[9]**2 + mat[10]**2)) * (180.0 / math.pi)
                     roll = math.atan2(mat[4], mat[0]) * (180.0 / math.pi)
@@ -224,7 +238,7 @@ def preprocess_face_pipeline(image_bytes: bytes) -> Dict[str, Any]:
                         "roll": float(np.round(roll, 1)),
                     }
         except Exception as e:
-            print("[Detection processing error]:", e)
+            print("[Detection processing notice]:", e)
 
     # Fallback face box if landmarker did not detect
     if not face_detected:
@@ -282,7 +296,7 @@ if app is not None:
         session = get_onnx_session()
         is_ready = session is not None
         return {
-            "status": "healthy",
+            "status": "healthy" if is_ready else "unhealthy",
             "model_loaded": is_ready,
             "pipeline_ready": is_ready,
             "architecture": "A4_spatial_frequency_geometry",
@@ -334,33 +348,9 @@ if app is not None:
             feed_dict[input_names[2]] = np.array([preprocessed["geometry_valid"]], dtype=np.bool_)
 
         outputs = session.run(None, feed_dict)
-        raw_logits = outputs[0][0].copy()  # (7,)
+        raw_logits = outputs[0][0]  # (7,)
 
-        # Modulate logits using 52 blendshape FACS features from MediaPipe
-        bs = preprocessed["blendshape_scores"]
-        smile = max(bs[44], bs[45]) # mouthSmileLeft, mouthSmileRight
-        jaw_open = bs[25]          # jawOpen
-        brow_down = max(bs[1], bs[2]) # browDownLeft, browDownRight
-        brow_up = bs[3]            # browInnerUp
-        frown = max(bs[30], bs[31]) # mouthFrownLeft, mouthFrownRight
-        sneer = max(bs[50], bs[51]) # noseSneerLeft, noseSneerRight
-        eye_wide = max(bs[21], bs[22]) # eyeWideLeft, eyeWideRight
-
-        # Canonical: 0: Neutral, 1: Happy, 2: Sad, 3: Surprise, 4: Fear, 5: Disgust, 6: Angry
-        if smile > 0.35:
-            raw_logits[1] += smile * 4.0
-        if jaw_open > 0.35 and brow_up > 0.2:
-            raw_logits[3] += (jaw_open + brow_up) * 2.5
-        if brow_down > 0.3 or sneer > 0.3:
-            raw_logits[6] += (brow_down + sneer) * 2.5
-        if frown > 0.25 or (brow_up > 0.35 and smile < 0.2):
-            raw_logits[2] += (frown + brow_up) * 2.0
-        if sneer > 0.35:
-            raw_logits[5] += sneer * 3.0
-        if eye_wide > 0.35 and brow_up > 0.35:
-            raw_logits[4] += (eye_wide + brow_up) * 2.5
-
-        # Compute Softmax Posteriors
+        # Compute Softmax Posteriors directly from model logits
         max_logit = np.max(raw_logits)
         exp_logits = np.exp(raw_logits - max_logit)
         probs = exp_logits / np.sum(exp_logits)
@@ -394,4 +384,6 @@ if app is not None:
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("backend.main:app", host="127.0.0.1", port=8001, log_level="info")
+    host = os.environ.get("HOST", "0.0.0.0")
+    port = int(os.environ.get("PORT", "8001"))
+    uvicorn.run("backend.main:app", host=host, port=port, log_level="info")

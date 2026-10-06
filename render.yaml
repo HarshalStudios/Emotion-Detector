@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: emotion-detector-backend
+    runtime: python
+    buildCommand: pip install --upgrade pip && pip install -r backend/requirements.txt
+    startCommand: uvicorn backend.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: ALLOWED_ORIGINS
+        value: "https://emotion-detector.pages.dev,http://localhost:3000,http://127.0.0.1:3000"
