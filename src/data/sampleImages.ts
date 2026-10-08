@@ -140,14 +140,14 @@ export const SAMPLE_IMAGES: SampleImageItem[] = [
     attribution: 'Evaluation Dataset Asset',
   },
 
-  // --- DISGUST (2) ---
+  // --- DISGUST (3) ---
   {
     id: 'disgust-01',
     image: '/samples/disgust/disgust_01.jpg',
     expectedEmotion: 'Disgust',
     title: 'Disgust 01',
     description: 'Wrinkled nose bridge with raised upper lip and narrowed eyes',
-    attribution: 'Evaluation Dataset Asset',
+    attribution: '16:9 Evaluation Reference',
   },
   {
     id: 'disgust-02',
@@ -155,7 +155,15 @@ export const SAMPLE_IMAGES: SampleImageItem[] = [
     expectedEmotion: 'Disgust',
     title: 'Disgust 02',
     description: 'Aversive facial grimace with elevated nasolabial fold',
-    attribution: 'Evaluation Dataset Asset',
+    attribution: '16:9 Evaluation Reference',
+  },
+  {
+    id: 'disgust-03',
+    image: '/samples/disgust/disgust_03.jpg',
+    expectedEmotion: 'Disgust',
+    title: 'Disgust 03',
+    description: 'Strong disgust expression with scrunched nose and curled upper lip',
+    attribution: '16:9 Evaluation Reference',
   },
 
   // --- ANGRY (3) ---

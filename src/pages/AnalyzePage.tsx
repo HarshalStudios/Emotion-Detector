@@ -227,7 +227,7 @@ export const AnalyzePage: React.FC<AnalyzePageProps> = ({ onRecordHistory }) => 
         setErrorInfo({
           type: 'permission_denied',
           title: 'Camera permission denied',
-          message: 'Allow camera access in your browser\'s site permissions, or test any of the 20 benchmark sample photos below.',
+          message: 'Allow camera access in your browser\'s site permissions, or test any of the 21 benchmark sample photos below.',
         });
       } else if (errName === 'NotFoundError' || errName === 'DevicesNotFoundError') {
         setErrorInfo({
@@ -500,7 +500,7 @@ export const AnalyzePage: React.FC<AnalyzePageProps> = ({ onRecordHistory }) => 
         </div>
       </section>
 
-      {/* 3. Sample Image Gallery Section (20 Genuine Labeled Benchmark Samples) */}
+      {/* 3. Sample Image Gallery Section (21 Genuine 16:9 Benchmark Samples) */}
       <section>
         <SampleGallery
           selectedSampleId={selectedSample.id}

@@ -22,9 +22,12 @@ const upload = multer({
 });
 
 let fastapiProcess: ChildProcess | null = null;
+let isSpawning = false;
+let isShuttingDown = false;
 
 // Ensure FastAPI is running on 127.0.0.1:8001
 async function ensureFastapiBackend() {
+  if (isSpawning) return;
   try {
     const res = await fetch(`${FASTAPI_URL}/health`, { signal: AbortSignal.timeout(1000) });
     if (res.ok) {
@@ -35,34 +38,48 @@ async function ensureFastapiBackend() {
     // Backend not running yet, spawn it
   }
 
+  isSpawning = true;
   console.log(`[FastAPI Proxy] Starting local FastAPI backend on ${FASTAPI_URL}...`);
-  fastapiProcess = spawn('python3', ['-m', 'uvicorn', 'backend.main:app', '--host', '127.0.0.1', '--port', '8001'], {
-    stdio: 'inherit',
-    detached: false,
-  });
+  try {
+    fastapiProcess = spawn('python3', ['-m', 'uvicorn', 'backend.main:app', '--host', '127.0.0.1', '--port', '8001'], {
+      stdio: 'inherit',
+      detached: false,
+    });
 
-  fastapiProcess.on('error', (err) => {
-    console.error('[FastAPI Subprocess Error]:', err);
-  });
+    fastapiProcess.on('error', (err) => {
+      console.error('[FastAPI Subprocess Error]:', err);
+    });
 
-  fastapiProcess.on('exit', (code, signal) => {
-    console.log(`[FastAPI Subprocess Exit] code: ${code}, signal: ${signal}`);
-  });
-
-  // Poll until ready (max 10s)
-  for (let i = 0; i < 20; i++) {
-    await new Promise((r) => setTimeout(r, 500));
-    try {
-      const res = await fetch(`${FASTAPI_URL}/health`, { signal: AbortSignal.timeout(1000) });
-      if (res.ok) {
-        console.log(`[FastAPI Proxy] FastAPI backend ready at ${FASTAPI_URL}`);
-        return;
+    fastapiProcess.on('exit', (code, signal) => {
+      console.log(`[FastAPI Subprocess Exit] code: ${code}, signal: ${signal}`);
+      fastapiProcess = null;
+      if (!isShuttingDown) {
+        console.log('[FastAPI Proxy] Scheduling auto-restart of FastAPI backend in 2s...');
+        setTimeout(() => {
+          ensureFastapiBackend().catch(console.error);
+        }, 2000);
       }
-    } catch {
-      // Retry
+    });
+
+    // Poll until ready (max 15s)
+    for (let i = 0; i < 30; i++) {
+      await new Promise((r) => setTimeout(r, 500));
+      try {
+        const res = await fetch(`${FASTAPI_URL}/health`, { signal: AbortSignal.timeout(1000) });
+        if (res.ok) {
+          console.log(`[FastAPI Proxy] FastAPI backend ready at ${FASTAPI_URL}`);
+          return;
+        }
+      } catch {
+        // Retry
+      }
     }
+    console.warn(`[FastAPI Proxy] Timeout waiting for FastAPI backend at ${FASTAPI_URL}`);
+  } catch (err) {
+    console.error('[FastAPI Proxy] Failed to spawn FastAPI process:', err);
+  } finally {
+    isSpawning = false;
   }
-  console.warn(`[FastAPI Proxy] Timeout waiting for FastAPI backend at ${FASTAPI_URL}`);
 }
 
 // 1. Authoritative Health Endpoint: Pure reverse proxy to FastAPI /health
@@ -212,6 +229,7 @@ app.post('/predict', upload.single('file') as any, async (req: Request, res: Res
 
 // Clean shutdown handler
 function handleShutdown() {
+  isShuttingDown = true;
   if (fastapiProcess) {
     console.log('[FastAPI Proxy] Stopping FastAPI backend subprocess...');
     try {

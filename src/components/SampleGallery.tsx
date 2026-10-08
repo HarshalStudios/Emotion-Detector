@@ -95,7 +95,7 @@ export const SampleGallery: React.FC<SampleGalleryProps> = ({
             ) : (
               <>
                 <Play className="w-3.5 h-3.5 fill-current" />
-                <span>EVALUATE ALL 20 SAMPLES</span>
+                <span>EVALUATE ALL {totalSamples} SAMPLES</span>
               </>
             )}
           </button>
@@ -189,12 +189,13 @@ export const SampleGallery: React.FC<SampleGalleryProps> = ({
                   : 'border-slate-800 bg-slate-950 hover:border-slate-700 hover:bg-slate-900/60'
               }`}
             >
-              {/* Thumbnail Container */}
-              <div className="relative w-full aspect-square bg-slate-950 overflow-hidden">
+              {/* Thumbnail Container: 16:9 Aspect Ratio */}
+              <div className="relative w-full aspect-video bg-slate-950 overflow-hidden">
                 <img
                   src={sample.image}
                   alt={`${sample.title} - Reference: ${sample.expectedEmotion}`}
                   loading="lazy"
+                  referrerPolicy="no-referrer"
                   className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-103"
                 />
 
